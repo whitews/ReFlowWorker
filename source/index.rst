@@ -11,7 +11,8 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-
+       intro
+       package-uploader-gui
 
 Indices and tables
 ==================
