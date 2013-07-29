@@ -87,7 +87,7 @@ Creating a Windows Executable - Windows 7
 
 #.  Run the pyinstaller.py script with the following options:
 
-    ``pyinstaller.py -w --onefile --hidden-import=reflowrestclient -p ..\ReFlowRESTClient-master\ ..\ReFlowRESTClient-master\bin\ReFlowUploader.py``
+    ``pyinstaller.py -w --onefile --hidden-import=reflowrestclient -p ..\ReFlowRESTClient-master\ ..\ReFlowRESTClient-master\bin\ReFlowClient.py``
 
 #.  PyInstaller should have created a new ReFlowUploader directory within the
     pyinstaller directory. Within that directory should be a build and dist
@@ -115,4 +115,60 @@ Creating a Windows Executable - Windows 7
 
 Creating a Mac Application Bundle - Mac OS X (10.8.3)
 ====
+#.  Download the PyInstaller zip file (remember to get version > 2.0):
+
+    ﻿http://www.pyinstaller.org/
+
+#.  Unzip the PyInstall zip file to the desktop (or wherever you want)
+
+#.  Install requests:
+
+    ``pip install requests``
+
+#.  Install PIL:
+
+    ``pip install PIL``
+
+#.  Download the ReFlowRESTClient code from Github:
+
+    ﻿https://github.com/whitews/ReFlowRESTClient/archive/master.zip
+
+#.  Unzip the ReFlowRESTClient zip file to the desktop (or wherever you want)
+
+#.  Change directories to the PyInstaller directory:
+
+    ``cd ~/Desktop/pyinstaller-pyinstaller-ccb6f3d/``
+
+#.  Run the pyinstaller.py script with the following options:
+
+    ``python pyinstaller.py -w --onefile --hidden-import=reflowrestclient -p ../ReFlowRESTClient-master/ ../ReFlowRESTClient-master/bin/ReFlowClient.py``
+
+#.  PyInstaller should have created a new ReFlowUploader directory within the
+    pyinstaller directory. Within that directory should be a build and dist
+    directory along with a spec file. The resulting Application Bundle in the dist
+    directory will not work, since the image and icon paths are not
+    specified. We need to edit the spec file in a text editor to add the path
+    to the image resources. Add the following lines in the spec file:
+
+    ::
+
+        a.datas += [('reflow_text.png','/Users/swhite/env/ReFlowRESTClient/resources/reflow_text.png','DATA')]
+
+    Also, change the ``app`` definition to include the icon path:
+
+    ::
+
+        app = BUNDLE(exe,
+             name='ReFlowClient.app',
+             icon='/Users/swhite/env/ReFlowRESTClient/resources/reflow.icns')
+
+    Note: Change the paths above to reflect the actual location of the files on
+    your system.
+
+#.  Remove the build directory and re-run PyInstaller on the spec file:
+
+    ``python pyinstaller.py --onefile ReFlowClient/ReFlowClient.spec``
+
+#.  Test that the resulting exe file in the ReFlowUploader/dist folder runs
+    correctly.
 
