@@ -15,14 +15,15 @@ WORKER_CONF = '/etc/reflow_worker.conf'
 class Worker(Daemon):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, host, name):
+    def __init__(self, host, name, sleep=300):
         # a Worker can have only one host
         self.host = host
         self.name = name
         self.__assigned_pr = None
+        self.__errors = list()
 
         # default sleep time between checking the server (in seconds)
-        self.sleep = 300
+        self.sleep = sleep
 
         # the token is the Worker's identifier to the host (i.e. password)
         # but it is not stored in the source code
@@ -49,8 +50,7 @@ class Worker(Daemon):
             sys.stderr.write(e.message)
             sys.exit(1)
 
-        # TODO: define and verify a location to save stuff
-        # for now put the PID file in /tmp
+        # Put the PID file in /tmp
         pid_file = '/tmp/reflow-worker-%s.pid' % self.name
 
         super(Worker, self).__init__(pid_file)
@@ -135,36 +135,85 @@ class Worker(Daemon):
             are_inputs_valid = self.validate_inputs()
 
             if not are_inputs_valid:
-                # TODO: Report an error for this PR back to ReFlow host
                 logging.warning(
                     "Error: Invalid input values for process request")
+                self.report_errors()
                 return
 
             # Download the samples
             assert isinstance(self.__assigned_pr, ProcessRequest)
             self.__assigned_pr.download_samples()
 
-            # Process the data
-            self.process()
+            # Stub method to process the data
+            process_status = self.process()
 
-            # TODO: Verify assignment once again
+            if not process_status:
+                self.report_errors()
 
-            # TODO: Upload results
+            # Verify assignment once again
+            try:
+                verify_assignment_response = utils.verify_pr_assignment(
+                    self.host,
+                    self.token,
+                    self.__assigned_pr.process_request_id)
+                if not verify_assignment_response['data']['assignment']:
+                    # we're not assigned anymore, delete our PR and return
+                    self.__assigned_pr = None
+                    raise Exception("Server revoked our assignment")
+            except Exception as e:
+                logging.warning("Exception: ", e.message)
+                return
 
-            # TODO: Report the ProcessRequest is complete
+            # Upload results
+            try:
+                self.upload_results()
+            except Exception as e:
+                logging.warning("Exception: ", e.message)
+                return
 
-            # TODO: Verify 'Complete' status
+            # Report the ProcessRequest is complete
+            try:
+                verify_complete_response = utils.complete_pr_assignment(
+                    self.host,
+                    self.token,
+                    self.__assigned_pr.process_request_id)
+                if verify_complete_response['status'] != 200:
+                    # something went wrong
+                    raise Exception("Server rejected our 'Complete' request")
+            except Exception as e:
+                logging.warning("Exception: ", e.message)
+                return
+
+            # Verify 'Complete' status
+            try:
+                r = utils.get_process_request(
+                    self.host,
+                    self.token,
+                    self.__assigned_pr.process_request_id)
+                if not 'data' in r:
+                    raise Exception("Improper host response, no 'data' key")
+                if not 'status' in r['data']:
+                    raise Exception("Improper host response, no 'status' key")
+                if r['data']['status'] != 'Complete':
+                    raise Exception("Failed to mark assignment complete")
+            except Exception as e:
+                # TODO: should probably do more than just log an error
+                # locally, perhaps try to send errors again? then re-try to
+                # send complete status again?
+                logging.warning("Exception: ", e.message)
+                return
 
             # TODO: Clean up! Delete the local files
 
-            # afterward, delete assignment
+            # We're done, delete assignment and clear errors
             self.__assigned_pr = None
+            self.__errors = list()
 
     @abc.abstractmethod
     def validate_inputs(self):
         """
         Override this method when subclassing Worker.
-        It will be called after when the Worker has an assigned ProcessRequest.
+        It will be called after the Worker is assigned a ProcessRequest.
         Returns True if the inputs are valid, else returns False
         """
         return False
@@ -174,5 +223,22 @@ class Worker(Daemon):
         """
         Override this method when subclassing Worker.
         It will be called after when the Worker has an assigned ProcessRequest.
+        Define all the processing tasks here.
+        """
+        return False
+
+    @abc.abstractmethod
+    def report_errors(self):
+        """
+        Override this method when subclassing Worker.
+        It will be called after process() if that method returned False
+        """
+        return
+
+    @abc.abstractmethod
+    def upload_results(self):
+        """
+        Override this method when subclassing Worker.
+        It will be called after process() if that method returns successfully
         """
         return
