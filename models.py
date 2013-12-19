@@ -54,6 +54,7 @@ class ProcessRequest(object):
         visits = list()
         specimens = list()
         storages = list()
+        pretreatments = list()
         stimulations = list()
         cytometers = list()
         acquisition_dates = list()
@@ -76,6 +77,8 @@ class ProcessRequest(object):
                 specimens.append(i['value'])
             elif i['key'] == 'storage':
                 storages.append(i['value'])
+            elif i['key'] == 'pretreatment':
+                pretreatments.append(i['value'])
             elif i['key'] == 'stimulation':
                 stimulations.append(i['value'])
             elif i['key'] == 'cytometer':
@@ -93,6 +96,38 @@ class ProcessRequest(object):
 
         for sample_dict in response['data']:
             sample = Sample(self.host, self.process_request_id, sample_dict)
+
+            if len(sites) > 0:
+                if sample.site_id not in sites:
+                    continue
+            if len(site_panels) > 0:
+                if sample.site_panel_id not in site_panels:
+                    continue
+            if len(subjects) > 0:
+                if sample.subject_id not in subjects:
+                    continue
+            if len(visits) > 0:
+                if sample.visit_id not in visits:
+                    continue
+            if len(specimens) > 0:
+                if sample.specimen_id not in specimens:
+                    continue
+            if len(storages) > 0:
+                if sample.storage not in storages:
+                    continue
+            if len(pretreatments) > 0:
+                if sample.pretreatment not in pretreatments:
+                    continue
+            if len(stimulations) > 0:
+                if sample.stimulation_id not in stimulations:
+                    continue
+            if len(cytometers) > 0:
+                if sample.cytometer_id not in cytometers:
+                    continue
+            if len(acquisition_dates) > 0:
+                if sample.acquisition_date not in acquisition_dates:
+                    continue
+
             self.samples.append(sample)
 
     def download_samples(self):
@@ -150,11 +185,16 @@ class Sample(object):
         self.site_id = sample_dict['site']
         self.site_name = sample_dict['site_name']
 
+        self.cytometer_id = sample_dict['cytometer']
+
         self.specimen_id = sample_dict['specimen']
         self.specimen_name = sample_dict['specimen_name']
 
         self.stimulation_id = sample_dict['stimulation']
         self.stimulation_name = sample_dict['stimulation_name']
+
+        self.storage = sample_dict['storage']
+        self.pretreatment = sample_dict['pretreatment']
 
         self.visit_id = sample_dict['visit']
         self.visit_name = sample_dict['visit_name']
