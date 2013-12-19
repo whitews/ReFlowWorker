@@ -18,6 +18,7 @@ class ProcessRequest(object):
         self.process_request_id = pr_dict['id']
         self.process_id = pr_dict['process']
         self.inputs = pr_dict['inputs']
+        self.use_fcs = False
         self.samples = list()
         self.__setup()
 
@@ -53,6 +54,8 @@ class ProcessRequest(object):
         for i in self.inputs:
             if i['key'] == 'project_panel' and not project_panel:
                 project_panel = i['value']
+            elif i['key'] == 'use_fcs':
+                self.use_fcs = i['value']
             elif i['key'] == 'site':
                 sites.append(i['value'])
             elif i['key'] == 'site_panel':
@@ -85,8 +88,12 @@ class ProcessRequest(object):
             self.samples.append(sample)
 
     def download_samples(self):
-        for s in self.samples:
-            s.download_subsample(self.token)
+        if self.use_fcs:
+            for s in self.samples:
+                s.download_fcs(self.token)
+        else:
+            for s in self.samples:
+                s.download_subsample(self.token)
 
 
 class Sample(object):
@@ -174,6 +181,37 @@ class Sample(object):
         self.subsample_path = subsample_path
         return True
 
+    def download_fcs(self, token):
+        """
+        ReFlow Worker sample downloads are kept in BASE_DIR
+        organized by host, then sample id
+
+        Returns True if download succeeded or file is already present
+        Also updates self.subsample_path
+        """
+        if not self.host or not self.sample_id:
+            return False
+
+        download_dir = BASE_DIR + str(self.host) + '/'
+        if not os.path.exists(download_dir):
+            os.makedirs(download_dir)
+        fcs_path = download_dir + str(self.sample_id) + '.fcs'
+
+        if not os.path.exists(fcs_path):
+            try:
+                utils.download_sample(
+                    self.host,
+                    token,
+                    sample_pk=self.sample_id,
+                    data_format='fcs',
+                    directory=download_dir)
+            except Exception, e:
+                print e
+                return False
+
+        self.fcs_path = fcs_path
+        return True
+
     def _parse_fcs_spill(self, token):
         """
         Finds if a Sample has an FCS $SPILL value.
@@ -216,6 +254,7 @@ class Sample(object):
                 # match the spill channels with the site panel, and
                 # save in new header list
                 for param in sp_resp['data'][0]['parameters']:
+                    # TODO: check params against markers
                     print param
 
     def _download_compensation(self, token):
@@ -231,16 +270,11 @@ class Sample(object):
             return False
 
         download_dir = BASE_DIR + str(self.host) + '/comp/'
-        comp_path = download_dir + 'comp_%s.npy' % self.compensation_id
 
         if not os.path.exists(download_dir):
             os.makedirs(download_dir)
 
-        # avoid re-downloading the comp matrix if already present
-        if os.path.exists(comp_path):
-            self.compensation_path = comp_path
-            return True
-
+        # always re-download compensation, it may have changed on the server
         try:
             utils.download_compensation(
                 self.host,
@@ -310,18 +344,27 @@ class Sample(object):
         # No compensation was found
         return False
 
-    def compensate_subsample(self, token):
+    def compensate_subsample(self, token, directory):
         """
-        Gets compensation matrix and applies it to the subsample.
+        Gets compensation matrix and applies it to the subsample, saving
+        compensated data in given directory
 
         Returns False if the subsample has not been downloaded or
-        if the compensation fails
+        if the compensation fails or if the directory given doesn't exist
         """
         if not self.host or not self.sample_id:
             return False
 
         if not (self.subsample_path and os.path.exists(self.subsample_path)):
             return False
+
+        if not (os.path.exists(directory)):
+            return False
+
+        self.subsample_comp_path = "%s/%s.npy" % (
+            directory,
+            str(self.sample_id)
+        )
 
         self._populate_compensation(token)
 
@@ -330,13 +373,15 @@ class Sample(object):
 
         # self.compensate has headers for the channel numbers, but
         # flowutils compensate() takes the plain matrix and indices as
-        # separate arguments (also note channel #'s vs indices)
+        # separate arguments
+        # (also note channel #'s vs indices)
         data = numpy.load(self.subsample_path)
         comp_data = flowutils.compensate.compensate(
             data,
             self.compensation[1:][:],
             self.compensation[0][:] - 1
         )
-        numpy.save(
-            BASE_DIR +
-            comp_data)
+
+        numpy.save(self.subsample_comp_path, comp_data)
+
+        return True
