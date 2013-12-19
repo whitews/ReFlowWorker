@@ -19,8 +19,8 @@ class Worker(Daemon):
         # a Worker can have only one host
         self.host = host
         self.name = name
-        self.__assigned_pr = None
-        self.__errors = list()
+        self.assigned_pr = None
+        self.errors = list()
 
         # default sleep time between checking the server (in seconds)
         self.sleep = sleep
@@ -67,7 +67,7 @@ class Worker(Daemon):
     def loop(self):
         # Once inside the loop, try VERY hard not to exit,
         # just capture and log all Exceptions and Errors
-        if self.__assigned_pr is None:
+        if self.assigned_pr is None:
             try:
                 viable_requests = utils.get_viable_process_requests(
                     self.host,
@@ -122,7 +122,7 @@ class Worker(Daemon):
                             self.host,
                             self.token,
                             request['id'])
-                        self.__assigned_pr = ProcessRequest(
+                        self.assigned_pr = ProcessRequest(
                             self.host,
                             self.token,
                             pr_response['data'])
@@ -141,8 +141,8 @@ class Worker(Daemon):
                 return
 
             # Download the samples
-            assert isinstance(self.__assigned_pr, ProcessRequest)
-            self.__assigned_pr.download_samples()
+            assert isinstance(self.assigned_pr, ProcessRequest)
+            self.assigned_pr.download_samples()
 
             # Stub method to process the data
             process_status = self.process()
@@ -155,10 +155,10 @@ class Worker(Daemon):
                 verify_assignment_response = utils.verify_pr_assignment(
                     self.host,
                     self.token,
-                    self.__assigned_pr.process_request_id)
+                    self.assigned_pr.process_request_id)
                 if not verify_assignment_response['data']['assignment']:
                     # we're not assigned anymore, delete our PR and return
-                    self.__assigned_pr = None
+                    self.assigned_pr = None
                     raise Exception("Server revoked our assignment")
             except Exception as e:
                 logging.warning("Exception: ", e.message)
@@ -176,7 +176,7 @@ class Worker(Daemon):
                 verify_complete_response = utils.complete_pr_assignment(
                     self.host,
                     self.token,
-                    self.__assigned_pr.process_request_id)
+                    self.assigned_pr.process_request_id)
                 if verify_complete_response['status'] != 200:
                     # something went wrong
                     raise Exception("Server rejected our 'Complete' request")
@@ -189,7 +189,7 @@ class Worker(Daemon):
                 r = utils.get_process_request(
                     self.host,
                     self.token,
-                    self.__assigned_pr.process_request_id)
+                    self.assigned_pr.process_request_id)
                 if not 'data' in r:
                     raise Exception("Improper host response, no 'data' key")
                 if not 'status' in r['data']:
@@ -206,8 +206,8 @@ class Worker(Daemon):
             # TODO: Clean up! Delete the local files
 
             # We're done, delete assignment and clear errors
-            self.__assigned_pr = None
-            self.__errors = list()
+            self.assigned_pr = None
+            self.errors = list()
 
     @abc.abstractmethod
     def validate_inputs(self):

@@ -16,6 +16,10 @@ class ProcessRequest(object):
         self.host = host
         self.token = token
         self.process_request_id = pr_dict['id']
+        self.directory = "%s%s/process_requests/%s/" % (
+            BASE_DIR,
+            self.host,
+            self.process_request_id)
         self.process_id = pr_dict['process']
         self.inputs = pr_dict['inputs']
         self.use_fcs = False
@@ -40,6 +44,9 @@ class ProcessRequest(object):
         site panel.
         """
 
+        if not os.path.exists(self.directory):
+            os.makedirs(self.directory)
+
         project_panel = None
         sites = list()
         site_panels = list()
@@ -55,7 +62,8 @@ class ProcessRequest(object):
             if i['key'] == 'project_panel' and not project_panel:
                 project_panel = i['value']
             elif i['key'] == 'use_fcs':
-                self.use_fcs = i['value']
+                if i['value'] == 'True':
+                    self.use_fcs = True
             elif i['key'] == 'site':
                 sites.append(i['value'])
             elif i['key'] == 'site_panel':
@@ -94,6 +102,15 @@ class ProcessRequest(object):
         else:
             for s in self.samples:
                 s.download_subsample(self.token)
+
+    def compensate_samples(self):
+        directory = self.directory + 'comp/'
+        if self.use_fcs:
+            for s in self.samples:
+                s.conpensate_fcs(self.token, directory)
+        else:
+            for s in self.samples:
+                s.compensate_subsample(self.token, directory)
 
 
 class Sample(object):
@@ -224,38 +241,49 @@ class Sample(object):
             sample_pk=self.sample_id,
             key='spill')
 
+        spill_text = None
         if len(spill_resp['data']) > 0:
-            if hasattr('spill', spill_resp['data'][0]):
-                spill_text = spill_resp['data'][0]['spill']
-                spill = spill_text.split(',')
+            if 'value' in spill_resp['data'][0]:
+                spill_text = spill_resp['data'][0]['value']
+        if not spill_text:
+            return False
 
-                n_markers = int(spill.pop(0))  # marker count
-                markers = spill[:n_markers]
-                matrix = spill[n_markers:]
+        spill = spill_text.split(',')
 
-                if not len(matrix) == n_markers**2:
-                    print "Wrong number of items in spill matrix"
-                    return False
+        n_markers = int(spill.pop(0))  # marker count
+        markers = spill[:n_markers]
+        matrix = spill[n_markers:]
 
-                np_matrix = numpy.array(matrix)
-                np_matrix = np_matrix.reshape(n_markers, n_markers)
+        if not len(matrix) == n_markers**2:
+            print "Wrong number of items in spill matrix"
+            return False
 
-                # the spill text header uses PnN values to identify
-                # the channels, so get the sample's site panel which
-                # contains the FCS PnN info
-                sp_resp = utils.get_site_panel(
-                    self.host,
-                    token,
-                    self.site_panel_id)
-                if not len(sp_resp['data']) > 0:
-                    print "No site panel was found."
-                    return False
+        np_matrix = numpy.array([float(i) for i in matrix])
+        np_matrix = np_matrix.reshape(n_markers, n_markers)
 
-                # match the spill channels with the site panel, and
-                # save in new header list
-                for param in sp_resp['data'][0]['parameters']:
-                    # TODO: check params against markers
-                    print param
+        # the spill text header uses PnN values to identify
+        # the channels, so get the sample's site panel which
+        # contains the FCS PnN info
+        sp_resp = utils.get_site_panel(
+            self.host,
+            token,
+            self.site_panel_id)
+        if not len(sp_resp['data']) > 0:
+            print "No site panel was found."
+            return False
+
+        # match the spill channels with the site panel, and
+        # save channel number in new header list
+        new_headers = markers
+        for param in sp_resp['data']['parameters']:
+            if param['fcs_text'] in markers:
+                i = markers.index(param['fcs_text'])
+                new_headers[i] = param['fcs_number']
+
+        new_headers = numpy.array(new_headers)
+        np_matrix = numpy.insert(np_matrix, 0, new_headers, 0)
+
+        return np_matrix
 
     def _download_compensation(self, token):
         # Compensation matrices are saved as Numpy arrays in a
@@ -338,7 +366,7 @@ class Sample(object):
             else:
                 return False
 
-        if self.compensation:
+        if len(self.compensation) > 0:
             return True
 
         # No compensation was found
@@ -358,8 +386,8 @@ class Sample(object):
         if not (self.subsample_path and os.path.exists(self.subsample_path)):
             return False
 
-        if not (os.path.exists(directory)):
-            return False
+        if not os.path.exists(directory):
+            os.makedirs(directory)
 
         self.subsample_comp_path = "%s/%s.npy" % (
             directory,
@@ -368,7 +396,7 @@ class Sample(object):
 
         self._populate_compensation(token)
 
-        if not self.compensation:
+        if not len(self.compensation) > 0:
             return False
 
         # self.compensate has headers for the channel numbers, but
