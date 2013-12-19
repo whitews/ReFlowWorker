@@ -96,36 +96,37 @@ class ProcessRequest(object):
 
         for sample_dict in response['data']:
             sample = Sample(self.host, self.process_request_id, sample_dict)
-
+            
+            # keep in mind the key/value inputs are strings
             if len(sites) > 0:
-                if sample.site_id not in sites:
+                if not str(sample.site_id) in sites:
                     continue
             if len(site_panels) > 0:
-                if sample.site_panel_id not in site_panels:
+                if not str(sample.site_panel_id) in site_panels:
                     continue
             if len(subjects) > 0:
-                if sample.subject_id not in subjects:
+                if not str(sample.subject_id) in subjects:
                     continue
             if len(visits) > 0:
-                if sample.visit_id not in visits:
+                if not str(sample.visit_id) in visits:
                     continue
             if len(specimens) > 0:
-                if sample.specimen_id not in specimens:
+                if not str(sample.specimen_id) in specimens:
                     continue
             if len(storages) > 0:
-                if sample.storage not in storages:
+                if not str(sample.storage) in storages:
                     continue
             if len(pretreatments) > 0:
-                if sample.pretreatment not in pretreatments:
+                if not str(sample.pretreatment) in pretreatments:
                     continue
             if len(stimulations) > 0:
-                if sample.stimulation_id not in stimulations:
+                if not str(sample.stimulation_id) in stimulations:
                     continue
             if len(cytometers) > 0:
-                if sample.cytometer_id not in cytometers:
+                if not str(sample.cytometer_id) in cytometers:
                     continue
             if len(acquisition_dates) > 0:
-                if sample.acquisition_date not in acquisition_dates:
+                if not str(sample.acquisition_date) in acquisition_dates:
                     continue
 
             self.samples.append(sample)
