@@ -18,10 +18,10 @@ class Daemon(object):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, pid_file):
-        self.stdin = os.devnull
-        self.stdout = os.devnull
-        self.stderr = os.devnull
-        self.pid_file = pid_file
+        self.__stdin = os.devnull
+        self.__stdout = os.devnull
+        self.__stderr = os.devnull
+        self.__pid_file = pid_file
 
     def __daemonize(self):
         """
@@ -57,20 +57,20 @@ class Daemon(object):
         # redirect standard file descriptors
         sys.stdout.flush()
         sys.stderr.flush()
-        si = file(self.stdin, 'r')
-        so = file(self.stdout, 'a+')
-        se = file(self.stderr, 'a+', 0)
+        si = file(self.__stdin, 'r')
+        so = file(self.__stdout, 'a+')
+        se = file(self.__stderr, 'a+', 0)
         os.dup2(si.fileno(), sys.stdin.fileno())
         os.dup2(so.fileno(), sys.stdout.fileno())
         os.dup2(se.fileno(), sys.stderr.fileno())
 
         # write pid_file
-        atexit.register(self.delete_pid)
+        atexit.register(self.__delete_pid)
         pid = str(os.getpid())
-        file(self.pid_file, 'w+').write("%s\n" % pid)
+        file(self.__pid_file, 'w+').write("%s\n" % pid)
 
-    def delete_pid(self):
-        os.remove(self.pid_file)
+    def __delete_pid(self):
+        os.remove(self.__pid_file)
 
     def start(self, debug=False):
         """
@@ -78,7 +78,7 @@ class Daemon(object):
         """
         # Check for a pid_file to see if the daemon already runs
         try:
-            pf = file(self.pid_file, 'r')
+            pf = file(self.__pid_file, 'r')
             pid = int(pf.read().strip())
             pf.close()
         except IOError:
@@ -86,13 +86,13 @@ class Daemon(object):
 
         if pid:
             message = "PID file %s already exist. Daemon already running?\n"
-            sys.stderr.write(message % self.pid_file)
+            sys.stderr.write(message % self.__pid_file)
             sys.exit(1)
 
         # Start the daemon
         if not debug:
             self.__daemonize()
-        self.run()
+        self._run()
 
     def stop(self):
         """
@@ -100,7 +100,7 @@ class Daemon(object):
         """
         # Get the pid from the pid_file
         try:
-            pf = file(self.pid_file, 'r')
+            pf = file(self.__pid_file, 'r')
             pid = int(pf.read().strip())
             pf.close()
         except IOError:
@@ -108,7 +108,7 @@ class Daemon(object):
 
         if not pid:
             message = "PID file %s does not exist. Daemon not running?\n"
-            sys.stderr.write(message % self.pid_file)
+            sys.stderr.write(message % self.__pid_file)
             return  # not an error in a restart
 
         # Try killing the daemon process
@@ -119,8 +119,8 @@ class Daemon(object):
         except OSError, err:
             err = str(err)
             if err.find("No such process") > 0:
-                if os.path.exists(self.pid_file):
-                    os.remove(self.pid_file)
+                if os.path.exists(self.__pid_file):
+                    os.remove(self.__pid_file)
             else:
                 print str(err)
                 sys.exit(1)
@@ -133,7 +133,7 @@ class Daemon(object):
         self.start()
 
     @abc.abstractmethod
-    def run(self):
+    def _run(self):
         """
         You must override this method when you subclass Daemon.
         It will be called after the process has been daemonized by
