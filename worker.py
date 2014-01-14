@@ -164,8 +164,8 @@ class Worker(Daemon):
                             pr_response['data'])
                 except Exception as e:
                     logging.warning("Exception: ", e.message)
-            else:
-                time.sleep(self.sleep)
+                    time.sleep(self.sleep)
+                    return
         else:
             # We've got something to do!
             are_inputs_valid = self.validate_inputs()
@@ -244,10 +244,10 @@ class Worker(Daemon):
             # We're done, delete assignment and clear errors
             self.assigned_pr = None
             self.errors = list()
+        time.sleep(self.sleep)
 
     def validate_inputs(self):
         """
-        Override this method when subclassing Worker.
         It will be called after the Worker is assigned a ProcessRequest.
         Returns True if the inputs are valid, else returns False
         """
@@ -255,7 +255,6 @@ class Worker(Daemon):
 
     def process(self):
         """
-        Override this method when subclassing Worker.
         It will be called after when the Worker has an assigned ProcessRequest.
         Define all the processing tasks here.
         """
@@ -263,14 +262,12 @@ class Worker(Daemon):
 
     def report_errors(self):
         """
-        Override this method when subclassing Worker.
         It will be called after process() if that method returned False
         """
         return
 
     def upload_results(self):
         """
-        Override this method when subclassing Worker.
         It will be called after process() if that method returns successfully
         """
         return
