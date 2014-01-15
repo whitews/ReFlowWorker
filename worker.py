@@ -33,7 +33,7 @@ class Worker(Daemon):
                 filemode='a',
                 level=logging.DEBUG)
         except IOError, e:
-            message = "ERROR: Failed to setup logging to file: %s\n" + \
+            message = "Failed to setup logging to file: %s\n" + \
                 "Do you have permission to write to this file?"
             sys.stderr.write(message % WORKER_LOG)
             sys.stderr.write(e.message)
@@ -44,7 +44,7 @@ class Worker(Daemon):
             worker_json = json.load(open(WORKER_CONF, 'r'))
         except Exception as e:
             logging.error(
-                "ERROR: Caught exception while opening %s" %
+                "Caught exception while opening %s" %
                 WORKER_CONF)
             logging.exception("EXCEPTION: %s" % e.message)
             sys.exit(1)
@@ -53,18 +53,18 @@ class Worker(Daemon):
         if 'host' in worker_json:
             self.host = worker_json['host']
         else:
-            message = "ERROR: Host not found in config file:  %s.\n"
+            message = "Host not found in config file:  %s.\n"
             logging.error(message % WORKER_CONF)
-            logging.error("ERROR: Exiting since host not found")
+            logging.error("Exiting since host not found")
             sys.exit(1)
 
         # look for the worker name in config file
         if 'name' in worker_json:
             self.name = worker_json['name']
         else:
-            message = "ERROR: Worker name not found in config file:  %s.\n"
+            message = "Worker name not found in config file:  %s.\n"
             logging.error(message % WORKER_CONF)
-            logging.error("ERROR: Exiting since worker name not found")
+            logging.error("Exiting since worker name not found")
             sys.exit(1)
 
         # look for the worker token in config file
@@ -72,9 +72,9 @@ class Worker(Daemon):
         if 'token' in worker_json:
             self.token = worker_json['token']
         else:
-            message = "ERROR: Worker token not found in config file:  %s.\n"
+            message = "Worker token not found in config file:  %s.\n"
             logging.error(message % WORKER_CONF)
-            logging.error("ERROR: Exiting since worker token not found")
+            logging.error("Exiting since worker token not found")
             sys.exit(1)
 
         # verify worker with the host
@@ -86,10 +86,10 @@ class Worker(Daemon):
             if self.genuine is not True:
                 raise Exception
         except Exception, e:
-            message = "ERROR: Could not verify worker %s with host %s\n"
+            message = "Could not verify worker %s with host %s\n"
             logging.error(message % (self.name, self.host))
-            logging.error("ERROR: Caught exception: ", e.message)
-            logging.error("ERROR: Exiting since worker credentials are invalid")
+            logging.error("Caught exception: ", e.message)
+            logging.error("Exiting since worker credentials are invalid")
             sys.exit(1)
 
         # Put the PID file in /tmp
@@ -116,13 +116,13 @@ class Worker(Daemon):
 
             if not 'data' in viable_requests:
                 logging.warning(
-                    "ERROR: Malformed response from ReFlow server attempting " +
+                    "Malformed response from ReFlow server attempting " +
                     "to get viable process requests.")
                 time.sleep(self.sleep)
                 return
             if not isinstance(viable_requests['data'], list):
                 logging.warning(
-                    "ERROR: Malformed response from ReFlow " +
+                    "Malformed response from ReFlow " +
                     "server attempting to get viable process requests.")
                 time.sleep(self.sleep)
                 return
@@ -173,7 +173,7 @@ class Worker(Daemon):
 
             if not are_inputs_valid:
                 logging.warning(
-                    "Error: Invalid input values for process request")
+                    "Invalid input values for process request")
                 self.report_errors()
                 return
 
