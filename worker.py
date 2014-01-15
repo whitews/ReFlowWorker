@@ -6,6 +6,7 @@ import time
 from reflowrestclient.processing.daemon import Daemon
 from reflowrestclient import utils
 from models import ProcessRequest
+from processes import PROCESS_LIST
 
 WORKER_CONF = '/etc/reflow_worker.conf'
 WORKER_LOG = '/var/log/reflow_worker.log'
@@ -251,6 +252,18 @@ class Worker(Daemon):
         It will be called after the Worker is assigned a ProcessRequest.
         Returns True if the inputs are valid, else returns False
         """
+        if self.assigned_pr.process_id in PROCESS_LIST:
+            if PROCESS_LIST[self.assigned_pr.process_id] == 'Test':
+                return True
+            if PROCESS_LIST[self.assigned_pr.process_id] == 'HDP':
+                # TODO: check the inputs here
+                # should have inputs:
+                #     n_clusters
+                #     n_iterations
+                #     burn_in
+                #     logicle_t
+                #     logicle_w
+                pass
         return False
 
     def process(self):
@@ -258,6 +271,9 @@ class Worker(Daemon):
         It will be called after when the Worker has an assigned ProcessRequest.
         Define all the processing tasks here.
         """
+        if self.assigned_pr.process_id in PROCESS_LIST:
+            if PROCESS_LIST[self.assigned_pr.process_id] == 'Test':
+                return True
         return False
 
     def report_errors(self):

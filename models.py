@@ -140,13 +140,18 @@ class ProcessRequest(object):
                 s.download_subsample(self.token)
 
     def compensate_samples(self):
-        directory = self.directory + 'comp/'
+        directory = self.directory + 'preprocessed/comp'
         if self.use_fcs:
             for s in self.samples:
                 s.conpensate_fcs(self.token, directory)
         else:
             for s in self.samples:
                 s.compensate_subsample(self.token, directory)
+
+    def apply_logicle_transform(self, logicle_t, logicle_w):
+        directory = self.directory + 'preprocessed/transformed'
+        for s in self.samples:
+            s.apply_logicle_transform(directory, logicle_t, logicle_w)
 
 
 class Sample(object):
@@ -167,9 +172,9 @@ class Sample(object):
         self.sample_id = sample_dict['id']
 
         self.fcs_path = None  # path to downloaded FCS file
-        self.fcs_comp_path = None  # path to fcs compensated data (numpy)
         self.subsample_path = None  # path to downloaded Numpy array
-        self.subsample_comp_path = None  # path sub-sampled comp'd data (numpy)
+        self.compensated_path = None  # path to comp'd data (numpy)
+        self.transformed_path = None  # path to transformed data (numpy)
 
         self.acquisition_date = sample_dict['acquisition_date']
         self.original_filename = sample_dict['original_filename']
@@ -430,7 +435,11 @@ class Sample(object):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        self.subsample_comp_path = "%s/%s.npy" % (
+        # we name these as compd_<id>.npy to differentiate between the
+        # comp matrix files which use comp_<id>.npy even though they are
+        # in a different directory...in case anyone ever moves stuff around
+        # things won't clobber each other
+        self.compensated_path = "%s/compd_%s.npy" % (
             directory,
             str(self.sample_id)
         )
@@ -451,6 +460,60 @@ class Sample(object):
             self.compensation[0][:] - 1
         )
 
-        numpy.save(self.subsample_comp_path, comp_data)
+        numpy.save(self.compensated_path, comp_data)
+
+        return True
+
+    def apply_logicle_transform(
+            self,
+            directory,
+            logicle_t,
+            logicle_w,
+            use_comp=True):
+        """
+        Transforms sample data
+
+        By default, the compensated data will be transformed and the default
+        transform is 'logicle'
+
+        Returns False if the transformation fails or if the directory given
+        cannot be created
+        """
+        if not self.host or not self.sample_id:
+            return False
+
+        if use_comp:
+            if not (
+                    self.compensated_path
+                    and
+                    os.path.exists(self.compensated_path)):
+                return False
+            else:
+                data = numpy.load(self.compensated_path)
+        else:
+            if not (
+                    self.subsample_path
+                    and
+                    os.path.exists(self.subsample_path)):
+                return False
+            else:
+                data = numpy.load(self.subsample_path)
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        self.transformed_path = "%s/logicle_%s.npy" % (
+            directory,
+            str(self.sample_id)
+        )
+
+        x_data = flowutils.transforms.logicle(
+            data,
+            channels,
+            t=logicle_t,
+            w=logicle_w
+        )
+
+        numpy.save(self.transformed_path, x_data)
 
         return True
