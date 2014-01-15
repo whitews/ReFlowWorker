@@ -46,7 +46,7 @@ class Worker(Daemon):
             logging.error(
                 "Caught exception while opening %s" %
                 WORKER_CONF)
-            logging.exception("EXCEPTION: %s" % e.message)
+            logging.exception("%s" % e.message)
             sys.exit(1)
 
         # look for the host in config file
