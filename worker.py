@@ -30,7 +30,7 @@ class Worker(Daemon):
         try:
             logging.basicConfig(
                 filename=WORKER_LOG,
-                filemode='w',
+                filemode='a',
                 level=logging.DEBUG)
         except IOError, e:
             message = "ERROR: Failed to setup logging to file: %s\n" + \
@@ -44,9 +44,9 @@ class Worker(Daemon):
             worker_json = json.load(open(WORKER_CONF, 'r'))
         except Exception as e:
             logging.error(
-                "ERROR: Caught exception while opening %s",
+                "ERROR: Caught exception while opening %s" %
                 WORKER_CONF)
-            logging.error("EXCEPTION: ", e.message)
+            logging.exception("EXCEPTION: %s" % e.message)
             sys.exit(1)
 
         # look for the host in config file
