@@ -24,6 +24,7 @@ class ProcessRequest(object):
         self.inputs = pr_dict['inputs']
         self.use_fcs = False
         self.samples = list()
+        self.panels = dict()
         self.__setup()
 
     def __setup(self):
@@ -95,7 +96,7 @@ class ProcessRequest(object):
             return
 
         for sample_dict in response['data']:
-            sample = Sample(self.host, self.process_request_id, sample_dict)
+            sample = Sample(self.host, self, sample_dict)
             
             # keep in mind the key/value inputs are strings
             if len(sites) > 0:
@@ -130,6 +131,14 @@ class ProcessRequest(object):
                     continue
 
             self.samples.append(sample)
+            if not sample.site_panel_id in self.panels:
+                panel_response = utils.get_site_panel(
+                    self.host,
+                    self.token,
+                    sample.site_panel_id)
+                if not 'data' in response:
+                    continue
+                self.panels[sample.site_panel_id] = panel_response['data']
 
     def download_samples(self):
         if self.use_fcs:
@@ -153,6 +162,62 @@ class ProcessRequest(object):
         for s in self.samples:
             s.apply_logicle_transform(directory, logicle_t, logicle_w)
 
+    def normalize_transformed_samples(self):
+        directory = self.directory + 'preprocessed/normalized'
+
+        # get distinct list of parameters common to all panels in this PR
+        param_set = set()
+        for panel in self.panels:
+            for param in self.panels[panel]['parameters']:
+                param_type = param['parameter_type']
+
+                if param_type in ['TIM', 'NUL']:
+                    continue
+
+                value_type = param['parameter_value_type']
+
+                param_str = "_".join([param_type, value_type])
+
+                markers = list()
+                for marker in param['markers']:
+                    markers.append(marker['name'])
+
+                if len(markers) > 0:
+                    markers.sort()
+                    markers = "_".join(markers)
+                    param_str = "_".join([param_str, markers])
+
+                if param['fluorochrome']:
+                    fluoro = param['fluorochrome']['fluorochrome_abbreviation']
+                    param_str = "_".join([param_str, fluoro])
+
+                param_set.add(param_str)
+                param['full_name'] = param_str
+
+        # the param_list will be the normalized order of parameters
+        param_list = list(param_set)
+        param_list.sort()
+
+        # panel_maps will hold the re-ordering of each site panel parameter
+        # keys will be site panel PK, and values will be a list of indices...
+        panel_maps = dict()
+
+        for panel in self.panels:
+            panel_maps[panel] = list()
+            # first, iterate through the param_list so the order is correct
+            for p in param_list:
+                for param in self.panels[panel]['parameters']:
+                    if 'full_name' in param:
+                        if param['full_name'] == p:
+                            panel_maps[panel].append(param['fcs_number'] - 1)
+
+        print panel_maps
+
+        print param_set
+
+        for s in self.samples:
+            pass
+
 
 class Sample(object):
     """
@@ -160,7 +225,7 @@ class Sample(object):
     Used by a Worker to manage downloaded samples related to a
     ReFlow ProcessRequest
     """
-    def __init__(self, host, process_request_id, sample_dict):
+    def __init__(self, host, process_request, sample_dict):
         """
         host: the ReFlow host from which the sample originated
         sample_dict: the ReFlow 'data' dictionary
@@ -168,7 +233,7 @@ class Sample(object):
         Raises KeyError if sample_dict is incomplete
         """
         self.host = host
-        self.process_request_id = process_request_id
+        self.process_request = process_request
         self.sample_id = sample_dict['id']
 
         self.fcs_path = None  # path to downloaded FCS file
@@ -405,7 +470,12 @@ class Sample(object):
             if self._download_compensation(token):
                 try:
                     self.compensation = numpy.load(
-                        BASE_DIR + '/comp/comp_%s.npy' % self.compensation_id)
+                        BASE_DIR + '%s/comp/comp_%s.npy'
+                        % (
+                            self.host,
+                            self.compensation_id
+                        )
+                    )
                 except Exception, e:
                     print e
                     return False
@@ -454,13 +524,24 @@ class Sample(object):
         # separate arguments
         # (also note channel #'s vs indices)
         data = numpy.load(self.subsample_path)
+
+        # note the 1st data column are event indices, we'll throw these away
+        data = data[:, 1:]
+        indices = self.compensation[0, :] - 1  # headers are channel #'s
+        indices = [int(i) for i in indices]
+        comp_matrix = self.compensation[1:, :]  # just the matrix
         comp_data = flowutils.compensate.compensate(
             data,
-            self.compensation[1:][:],
-            self.compensation[0][:] - 1
+            comp_matrix,
+            indices
         )
 
-        numpy.save(self.compensated_path, comp_data)
+        data[:, indices] = comp_data
+
+        # need to re-assemble our non-compensated columns with the new
+        # compensated columns
+
+        numpy.save(self.compensated_path, data)
 
         return True
 
@@ -507,9 +588,22 @@ class Sample(object):
             str(self.sample_id)
         )
 
+        # don't transform scatter channels, time, or null channels
+        panel = self.process_request.panels[self.site_panel_id]
+        if 'parameters' not in panel:
+            return False
+        indices = list()
+        for param in panel['parameters']:
+            if 'parameter_value_type' not in param:
+                return False
+            if param['parameter_type'] in ['FSC', 'SSC', 'TIM', 'NUL']:
+                continue
+            else:
+                indices.append(param['fcs_number'] - 1)
+
         x_data = flowutils.transforms.logicle(
             data,
-            channels,
+            indices,
             t=logicle_t,
             w=logicle_w
         )

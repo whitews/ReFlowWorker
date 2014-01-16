@@ -7,6 +7,9 @@ PROCESS_LIST = {
 
 
 def test(process_request):
+    process_request.compensate_samples()
+    process_request.apply_logicle_transform(logicle_t=262144, logicle_w=0.5)
+    process_request.normalize_transformed_samples()
     return True
 
 

@@ -6,7 +6,7 @@ import time
 from reflowrestclient.processing.daemon import Daemon
 from reflowrestclient import utils
 from models import ProcessRequest
-from processes import PROCESS_LIST
+from processes import PROCESS_LIST, dispatch_process
 
 WORKER_CONF = '/etc/reflow_worker.conf'
 WORKER_LOG = '/var/log/reflow_worker.log'
@@ -272,8 +272,8 @@ class Worker(Daemon):
         Define all the processing tasks here.
         """
         if self.assigned_pr.process_id in PROCESS_LIST:
-            if PROCESS_LIST[self.assigned_pr.process_id] == 'Test':
-                return True
+            process = dispatch_process[self.assigned_pr.process_id]
+            return process(self.assigned_pr)
         return False
 
     def report_errors(self):
