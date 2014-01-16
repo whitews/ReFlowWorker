@@ -24,6 +24,7 @@ class ProcessRequest(object):
         self.inputs = pr_dict['inputs']
         self.use_fcs = False
         self.samples = list()
+        self.panels = dict()
         self.__setup()
 
     def __setup(self):
@@ -95,7 +96,7 @@ class ProcessRequest(object):
             return
 
         for sample_dict in response['data']:
-            sample = Sample(self.host, self.process_request_id, sample_dict)
+            sample = Sample(self.host, self, sample_dict)
             
             # keep in mind the key/value inputs are strings
             if len(sites) > 0:
@@ -130,6 +131,14 @@ class ProcessRequest(object):
                     continue
 
             self.samples.append(sample)
+            if not sample.site_panel_id in self.panels:
+                panel_response = utils.get_site_panel(
+                    self.host,
+                    self.token,
+                    sample.site_panel_id)
+                if not 'data' in response:
+                    continue
+                self.panels[sample.site_panel_id] = panel_response['data']
 
     def download_samples(self):
         if self.use_fcs:
@@ -160,7 +169,7 @@ class Sample(object):
     Used by a Worker to manage downloaded samples related to a
     ReFlow ProcessRequest
     """
-    def __init__(self, host, process_request_id, sample_dict):
+    def __init__(self, host, process_request, sample_dict):
         """
         host: the ReFlow host from which the sample originated
         sample_dict: the ReFlow 'data' dictionary
@@ -168,7 +177,7 @@ class Sample(object):
         Raises KeyError if sample_dict is incomplete
         """
         self.host = host
-        self.process_request_id = process_request_id
+        self.process_request = process_request
         self.sample_id = sample_dict['id']
 
         self.fcs_path = None  # path to downloaded FCS file
@@ -405,7 +414,12 @@ class Sample(object):
             if self._download_compensation(token):
                 try:
                     self.compensation = numpy.load(
-                        BASE_DIR + '/comp/comp_%s.npy' % self.compensation_id)
+                        BASE_DIR + '%s/comp/comp_%s.npy'
+                        % (
+                            self.host,
+                            self.compensation_id
+                        )
+                    )
                 except Exception, e:
                     print e
                     return False
@@ -456,8 +470,8 @@ class Sample(object):
         data = numpy.load(self.subsample_path)
         comp_data = flowutils.compensate.compensate(
             data,
-            self.compensation[1:][:],
-            self.compensation[0][:] - 1
+            self.compensation[1:][:],  # just the matrix
+            self.compensation[0][:] - 1  # headers are channel #'s
         )
 
         numpy.save(self.compensated_path, comp_data)

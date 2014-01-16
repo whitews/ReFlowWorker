@@ -7,6 +7,7 @@ PROCESS_LIST = {
 
 
 def test(process_request):
+    process_request.compensate_samples()
     return True
 
 
