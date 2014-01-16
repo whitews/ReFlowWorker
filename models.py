@@ -192,6 +192,26 @@ class ProcessRequest(object):
                     param_str = "_".join([param_str, fluoro])
 
                 param_set.add(param_str)
+                param['full_name'] = param_str
+
+        # the param_list will be the normalized order of parameters
+        param_list = list(param_set)
+        param_list.sort()
+
+        # panel_maps will hold the re-ordering of each site panel parameter
+        # keys will be site panel PK, and values will be a list of indices...
+        panel_maps = dict()
+
+        for panel in self.panels:
+            panel_maps[panel] = list()
+            # first, iterate through the param_list so the order is correct
+            for p in param_list:
+                for param in self.panels[panel]['parameters']:
+                    if 'full_name' in param:
+                        if param['full_name'] == p:
+                            panel_maps[panel].append(param['fcs_number'] - 1)
+
+        print panel_maps
 
         print param_set
 
