@@ -468,13 +468,24 @@ class Sample(object):
         # separate arguments
         # (also note channel #'s vs indices)
         data = numpy.load(self.subsample_path)
+
+        # note the 1st data column are event indices, we'll throw these away
+        data = data[:, 1:]
+        indices = self.compensation[0, :] - 1  # headers are channel #'s
+        indices = [int(i) for i in indices]
+        comp_matrix = self.compensation[1:, :]  # just the matrix
         comp_data = flowutils.compensate.compensate(
             data,
-            self.compensation[1:][:],  # just the matrix
-            self.compensation[0][:] - 1  # headers are channel #'s
+            comp_matrix,
+            indices
         )
 
-        numpy.save(self.compensated_path, comp_data)
+        data[:, indices] = comp_data
+
+        # need to re-assemble our non-compensated columns with the new
+        # compensated columns
+
+        numpy.save(self.compensated_path, data)
 
         return True
 
