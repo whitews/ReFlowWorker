@@ -162,6 +162,38 @@ class ProcessRequest(object):
         for s in self.samples:
             s.apply_logicle_transform(directory, logicle_t, logicle_w)
 
+    def normalize_transformed_samples(self):
+        directory = self.directory + 'preprocessed/normalized'
+
+        # get distinct list of parameters common to all panels in this PR
+        param_set = set()
+        for panel in self.panels:
+            for param in self.panels[panel]['parameters']:
+                param_type = param['parameter_type']
+                value_type = param['parameter_value_type']
+
+                param_str = "_".join([param_type, value_type])
+
+                markers = list()
+                for marker in param['markers']:
+                    markers.append(marker['name'])
+
+                if len(markers) > 0:
+                    markers.sort()
+                    markers = "_".join(markers)
+                    param_str = "_".join([param_str, markers])
+
+                if param['fluorochrome']:
+                    fluoro = param['fluorochrome']['fluorochrome_abbreviation']
+                    param_str = "_".join([param_str, fluoro])
+
+                param_set.add(param_str)
+
+        print param_set
+
+        for s in self.samples:
+            pass
+
 
 class Sample(object):
     """
@@ -532,9 +564,22 @@ class Sample(object):
             str(self.sample_id)
         )
 
+        # don't transform scatter channels, time, or null channels
+        panel = self.process_request.panels[self.site_panel_id]
+        if 'parameters' not in panel:
+            return False
+        indices = list()
+        for param in panel['parameters']:
+            if 'parameter_value_type' not in param:
+                return False
+            if param['parameter_type'] in ['FSC', 'SSC', 'TIM', 'NUL']:
+                continue
+            else:
+                indices.append(param['fcs_number'] - 1)
+
         x_data = flowutils.transforms.logicle(
             data,
-            channels,
+            indices,
             t=logicle_t,
             w=logicle_w
         )
