@@ -170,6 +170,10 @@ class ProcessRequest(object):
         for panel in self.panels:
             for param in self.panels[panel]['parameters']:
                 param_type = param['parameter_type']
+
+                if param_type in ['TIM', 'NUL']:
+                    continue
+
                 value_type = param['parameter_value_type']
 
                 param_str = "_".join([param_type, value_type])
