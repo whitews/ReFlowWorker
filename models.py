@@ -16,7 +16,7 @@ class ProcessRequest(object):
         self.host = host
         self.token = token
         self.process_request_id = pr_dict['id']
-        self.directory = "%s%s/process_requests/%s/" % (
+        self.directory = "%s%s/process_requests/%s" % (
             BASE_DIR,
             self.host,
             self.process_request_id)
@@ -25,6 +25,7 @@ class ProcessRequest(object):
         self.use_fcs = False
         self.samples = list()
         self.panels = dict()
+        self.results_directory = self.directory + "/results"
         self.__setup()
 
     def __setup(self):
@@ -45,8 +46,8 @@ class ProcessRequest(object):
         site panel.
         """
 
-        if not os.path.exists(self.directory):
-            os.makedirs(self.directory)
+        if not os.path.exists(self.results_directory):
+            os.makedirs(self.results_directory)
 
         project_panel = None
         sites = list()
@@ -620,7 +621,7 @@ class Sample(object):
         else:
             data = numpy.load(self.subsample_path)
 
-        norm_data = data
+        norm_data = data[:, map]
 
         normalized_path = "%s/norm_%s.npy" % (
             directory,
