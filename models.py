@@ -211,12 +211,8 @@ class ProcessRequest(object):
                         if param['full_name'] == p:
                             panel_maps[panel].append(param['fcs_number'] - 1)
 
-        print panel_maps
-
-        print param_set
-
         for s in self.samples:
-            pass
+            s.create_normalized(directory, panel_maps[s.site_panel_id])
 
 
 class Sample(object):
@@ -240,6 +236,7 @@ class Sample(object):
         self.subsample_path = None  # path to downloaded Numpy array
         self.compensated_path = None  # path to comp'd data (numpy)
         self.transformed_path = None  # path to transformed data (numpy)
+        self.normalized_path = None  # path to normalized data (numpy)
 
         self.acquisition_date = sample_dict['acquisition_date']
         self.original_filename = sample_dict['original_filename']
@@ -505,15 +502,6 @@ class Sample(object):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        # we name these as compd_<id>.npy to differentiate between the
-        # comp matrix files which use comp_<id>.npy even though they are
-        # in a different directory...in case anyone ever moves stuff around
-        # things won't clobber each other
-        self.compensated_path = "%s/compd_%s.npy" % (
-            directory,
-            str(self.sample_id)
-        )
-
         self._populate_compensation(token)
 
         if not len(self.compensation) > 0:
@@ -538,10 +526,18 @@ class Sample(object):
 
         data[:, indices] = comp_data
 
-        # need to re-assemble our non-compensated columns with the new
-        # compensated columns
+        # we name these as compd_<id>.npy to differentiate between the
+        # comp matrix files which use comp_<id>.npy even though they are
+        # in a different directory...in case anyone ever moves stuff around
+        # things won't clobber each other
+        compensated_path = "%s/compd_%s.npy" % (
+            directory,
+            str(self.sample_id)
+        )
 
-        numpy.save(self.compensated_path, data)
+        numpy.save(compensated_path, data)
+
+        self.compensated_path = compensated_path
 
         return True
 
@@ -583,12 +579,7 @@ class Sample(object):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        self.transformed_path = "%s/logicle_%s.npy" % (
-            directory,
-            str(self.sample_id)
-        )
-
-        # don't transform scatter channels, time, or null channels
+        # don't transform scatter, time, or null channels
         panel = self.process_request.panels[self.site_panel_id]
         if 'parameters' not in panel:
             return False
@@ -608,6 +599,34 @@ class Sample(object):
             w=logicle_w
         )
 
-        numpy.save(self.transformed_path, x_data)
+        transformed_path = "%s/logicle_%s.npy" % (
+            directory,
+            str(self.sample_id)
+        )
+        numpy.save(transformed_path, x_data)
+
+        self.transformed_path = transformed_path
 
         return True
+
+    def create_normalized(self, directory, map):
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        if self.transformed_path:
+            data = numpy.load(self.transformed_path)
+        elif self.compensated_path:
+            data = numpy.load(self.compensated_path)
+        else:
+            data = numpy.load(self.subsample_path)
+
+        norm_data = data
+
+        normalized_path = "%s/norm_%s.npy" % (
+            directory,
+            str(self.sample_id)
+        )
+
+        numpy.save(normalized_path, norm_data)
+
+        self.normalized_path = normalized_path
