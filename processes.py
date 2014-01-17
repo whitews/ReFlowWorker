@@ -48,19 +48,22 @@ def test(process_request):
 
     # Save our sample ID index
     file_path = process_request.results_directory + "/sample_id_map.txt"
-    with open(file_path) as the_file:
-        for sample_id in sample_id_map:
-            the_file.write("%s\n" % sample_id)
+    the_file = open(file_path, 'w')
+    for sample_id in sample_id_map:
+        the_file.write("%s\n" % sample_id)
+    the_file.close()
 
     # Save pickled results
     file_path = process_request.results_directory + "/results.pkl"
     the_file = open(file_path, 'wb')
     cPickle.dump(results, the_file)
+    the_file.close()
 
     # Save pickled averaged results
-    file_path = process_request.results_directory + "/averaged_results.csv"
+    file_path = process_request.results_directory + "/averaged_results.pkl"
     the_file = open(file_path, 'wb')
     cPickle.dump(results_averaged, the_file)
+    the_file.close()
 
     return True
 

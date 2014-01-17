@@ -245,6 +245,7 @@ class Worker(Daemon):
             # We're done, delete assignment and clear errors
             self.assigned_pr = None
             self.errors = list()
+            return
         time.sleep(self.sleep)
 
     def validate_inputs(self):
