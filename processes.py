@@ -21,9 +21,11 @@ def test(process_request):
         data_sets.append(norm_data)
         sample_id_map.append(s.sample_id)
 
+    n_data_sets = len(data_sets)
     n_clusters = 48
     n_iterations = 2
     burn_in = 100
+    seed = 123
 
     model = cluster.HDPMixtureModel(n_clusters, n_iterations, burn_in)
 
@@ -33,7 +35,7 @@ def test(process_request):
     results = model.fit(
         data_sets,
         True,
-        seed=123,
+        seed=seed,
         munkres_id=True,
         verbose=True
     )
@@ -42,6 +44,26 @@ def test(process_request):
 
     delta_time = time_1 - time_0
     print delta_time.total_seconds()
+
+    # pis are split by data set, then iteration
+    pis = np.array_split(results.pis, n_data_sets)
+    for i, p in enumerate(pis):
+        pis[i] = np.array_split(pis[i][0], n_iterations)
+
+    archive_dict = dict()
+    archive_dict['inputs'] = dict()
+    # TODO: add input here
+
+    archive_dict['samples'] = dict()
+    for i in pis:
+        archive_dict['samples']['sample_id'] = sample_id_map[i]
+        archive_dict['samples']['pis'] = [list(j) for j in pis[i]]
+
+    # mus and sigmas are split by iteration
+    mus = np.array_split(results.mus, n_iterations)
+    sigmas = np.array_split(results.sigmas, n_iterations)
+
+    # archive_dict['mus'] =
 
     # Get averaged results
     results_averaged = results.average()
