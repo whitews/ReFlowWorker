@@ -150,7 +150,7 @@ class ProcessRequest(object):
                 s.download_subsample(self.token)
 
     def compensate_samples(self):
-        directory = self.directory + 'preprocessed/comp'
+        directory = self.directory + '/preprocessed/comp'
         if self.use_fcs:
             for s in self.samples:
                 s.conpensate_fcs(self.token, directory)
@@ -159,12 +159,12 @@ class ProcessRequest(object):
                 s.compensate_subsample(self.token, directory)
 
     def apply_logicle_transform(self, logicle_t, logicle_w):
-        directory = self.directory + 'preprocessed/transformed'
+        directory = self.directory + '/preprocessed/transformed'
         for s in self.samples:
             s.apply_logicle_transform(directory, logicle_t, logicle_w)
 
     def normalize_transformed_samples(self):
-        directory = self.directory + 'preprocessed/normalized'
+        directory = self.directory + '/preprocessed/normalized'
 
         # get distinct list of parameters common to all panels in this PR
         param_set = set()
