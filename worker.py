@@ -102,7 +102,7 @@ class Worker(Daemon):
             self.__loop()
 
     def __loop(self):
-        # Once inside the loop, try VERY hard not to exit,
+        # Once inside the loop, try, pun intended, VERY hard not to exit,
         # just capture and log all Exceptions and Errors
         if self.assigned_pr is None:
             try:
@@ -182,7 +182,11 @@ class Worker(Daemon):
             self.assigned_pr.download_samples()
 
             # Stub method to process the data
-            process_status = self.process()
+            try:
+                process_status = self.process()
+            except Exception, e:
+                logging.exception(e.message)
+                return
 
             if not process_status:
                 self.report_errors()
@@ -198,14 +202,14 @@ class Worker(Daemon):
                     self.assigned_pr = None
                     raise Exception("Server revoked our assignment")
             except Exception as e:
-                logging.warning("Exception: ", e.message)
+                logging.exception(e.message)
                 return
 
             # Upload results
             try:
                 self.upload_results()
             except Exception as e:
-                logging.warning("Exception: ", e.message)
+                logging.exception(e.message)
                 return
 
             # Report the ProcessRequest is complete
@@ -218,7 +222,7 @@ class Worker(Daemon):
                     # something went wrong
                     raise Exception("Server rejected our 'Complete' request")
             except Exception as e:
-                logging.warning("Exception: ", e.message)
+                logging.exception(e.message)
                 return
 
             # Verify 'Complete' status
@@ -237,7 +241,7 @@ class Worker(Daemon):
                 # TODO: should probably do more than just log an error
                 # locally, perhaps try to send errors again? then re-try to
                 # send complete status again?
-                logging.warning("Exception: ", e.message)
+                logging.exception(e.message)
                 return
 
             # TODO: Clean up! Delete the local files

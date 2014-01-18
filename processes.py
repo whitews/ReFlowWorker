@@ -16,7 +16,7 @@ def test(process_request):
 
     data_sets = list()
     sample_id_map = list()
-    for s in process_request.samples:
+    for s in process_request.samples[:2]:
         norm_data = np.load(s.normalized_path)
         data_sets.append(norm_data)
         sample_id_map.append(s.sample_id)
@@ -54,10 +54,11 @@ def test(process_request):
     archive_dict['inputs'] = dict()
     # TODO: add input here
 
-    archive_dict['samples'] = dict()
-    for i in pis:
-        archive_dict['samples']['sample_id'] = sample_id_map[i]
-        archive_dict['samples']['pis'] = [list(j) for j in pis[i]]
+    archive_dict['samples'] = list()
+    for i, pi in enumerate(pis):
+        archive_dict['samples'].append(dict())
+        archive_dict['samples'][i]['sample_id'] = sample_id_map[i]
+        archive_dict['samples'][i]['pis'] = [j.tolist() for j in pi]
 
     # mus and sigmas are split by iteration
     mus = np.array_split(results.mus, n_iterations)
