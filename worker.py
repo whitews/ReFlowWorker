@@ -2,6 +2,7 @@ import json
 import logging
 import sys
 import time
+import os
 
 from reflowrestclient.processing.daemon import Daemon
 from reflowrestclient import utils
@@ -186,6 +187,7 @@ class Worker(Daemon):
                 process_status = self.process()
             except Exception, e:
                 logging.exception(e.message)
+                self.report_errors()
                 return
 
             if not process_status:
@@ -291,6 +293,27 @@ class Worker(Daemon):
         """
         It will be called after process() if that method returns successfully
         """
+        if self.assigned_pr is None:
+            return
+
+        # get list of files in the results dir for this PR id
+        # all files in results will be uploaded to ReFlow as
+        # ProcessOutputValue model instances, and these have 3 values:
+        #     PR_id: the id of the ProcessRequest
+        #     key: the name of a results file
+        #     value: the file itself (usually JSON)
+        results_files = list()
+        results_dir = self.assigned_pr.results_directory
+        for f in os.listdir(results_dir):
+            if os.path.isfile(os.path.join(results_dir, f)):
+                results_files.append(f)
+        for f in results_files:
+            utils.post_process_request_output(
+                self.host,
+                self.token,
+                self.assigned_pr.process_request_id,
+                os.path.join(results_dir, f)
+            )
         return
 
 if __name__ == "__main__":

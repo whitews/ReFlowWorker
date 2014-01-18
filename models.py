@@ -25,6 +25,14 @@ class ProcessRequest(object):
         self.use_fcs = False
         self.samples = list()
         self.panels = dict()
+
+        # the param_list will be the normalized order of parameters
+        self.param_list = list()
+
+        # panel_maps will hold the re-ordering of each site panel parameter
+        # keys will be site panel PK, and values will be a list of indices...
+        self.panel_maps = dict()
+
         self.results_directory = self.directory + "/results"
         self.__setup()
 
@@ -196,24 +204,25 @@ class ProcessRequest(object):
                 param['full_name'] = param_str
 
         # the param_list will be the normalized order of parameters
-        param_list = list(param_set)
-        param_list.sort()
+        self.param_list = list(param_set)
+        self.param_list.sort()
 
         # panel_maps will hold the re-ordering of each site panel parameter
         # keys will be site panel PK, and values will be a list of indices...
-        panel_maps = dict()
+        self.panel_maps = dict()
 
         for panel in self.panels:
-            panel_maps[panel] = list()
+            self.panel_maps[panel] = list()
             # first, iterate through the param_list so the order is correct
-            for p in param_list:
+            for p in self.param_list:
                 for param in self.panels[panel]['parameters']:
                     if 'full_name' in param:
                         if param['full_name'] == p:
-                            panel_maps[panel].append(param['fcs_number'] - 1)
+                            self.panel_maps[panel].append(
+                                param['fcs_number'] - 1)
 
         for s in self.samples:
-            s.create_normalized(directory, panel_maps[s.site_panel_id])
+            s.create_normalized(directory, self.panel_maps[s.site_panel_id])
 
 
 class Sample(object):
@@ -610,7 +619,7 @@ class Sample(object):
 
         return True
 
-    def create_normalized(self, directory, map):
+    def create_normalized(self, directory, channel_map):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -621,7 +630,7 @@ class Sample(object):
         else:
             data = numpy.load(self.subsample_path)
 
-        norm_data = data[:, map]
+        norm_data = data[:, channel_map]
 
         normalized_path = "%s/norm_%s.npy" % (
             directory,
