@@ -45,14 +45,14 @@ def test(process_request):
     delta_time = time_1 - time_0
     print delta_time.total_seconds()
 
+    archive_dict = dict()
+    archive_dict['inputs'] = dict()
+    # TODO: add input here
+
     # pis are split by data set, then iteration
     pis = np.array_split(results.pis, n_data_sets)
     for i, p in enumerate(pis):
         pis[i] = np.array_split(pis[i][0], n_iterations)
-
-    archive_dict = dict()
-    archive_dict['inputs'] = dict()
-    # TODO: add input here
 
     archive_dict['samples'] = list()
     for i, pi in enumerate(pis):
@@ -64,7 +64,13 @@ def test(process_request):
     mus = np.array_split(results.mus, n_iterations)
     sigmas = np.array_split(results.sigmas, n_iterations)
 
-    # archive_dict['mus'] =
+    archive_dict['mus'] = list()
+    for i, mu in enumerate(mus):
+        archive_dict['mus'].append([j.tolist() for j in mu])
+
+    archive_dict['sigmas'] = list()
+    for i, sigma in enumerate(sigmas):
+        archive_dict['sigmas'].append([j.tolist() for j in sigma])
 
     # Get averaged results
     results_averaged = results.average()
