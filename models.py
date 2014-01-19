@@ -25,6 +25,7 @@ class ProcessRequest(object):
         self.use_fcs = False
         self.samples = list()
         self.panels = dict()
+        self.required_inputs = None  # will be populated with dict in worker
 
         # the param_list will be the normalized order of parameters
         self.param_list = list()

@@ -89,7 +89,7 @@ class Worker(Daemon):
         except Exception, e:
             message = "Could not verify worker %s with host %s\n"
             logging.error(message % (self.name, self.host))
-            logging.error("Caught exception: ", e.message)
+            logging.error(e.message)
             logging.error("Exiting since worker credentials are invalid")
             sys.exit(1)
 
@@ -252,7 +252,8 @@ class Worker(Daemon):
             self.assigned_pr = None
             self.errors = list()
             return
-        time.sleep(self.sleep)
+        if self.assigned_pr is None:
+            time.sleep(self.sleep)
 
     def validate_inputs(self):
         """
@@ -263,14 +264,33 @@ class Worker(Daemon):
             if PROCESS_LIST[self.assigned_pr.process_id] == 'Test':
                 return True
             if PROCESS_LIST[self.assigned_pr.process_id] == 'HDP':
-                # TODO: check the inputs here
                 # should have inputs:
-                #     n_clusters
-                #     n_iterations
+                #     cluster_count
+                #     iteration_count
                 #     burn_in
                 #     logicle_t
                 #     logicle_w
-                pass
+                #     random_seed
+                required_inputs = {
+                    'cluster_count': False,
+                    'iteration_count': False,
+                    'burn_in': False,
+                    'logicle_t': False,
+                    'logicle_w': False,
+                    'random_seed': False
+                }
+
+                for pr_input in self.assigned_pr.inputs:
+                    if pr_input['key'] in required_inputs.keys():
+                        required_inputs[pr_input['key']] = pr_input['value']
+                for key in required_inputs:
+                    if required_inputs[key] is False:
+                        logging.error(
+                            "Missing required input '%s' for HDP process" % key)
+                        return False
+                self.assigned_pr.required_inputs = required_inputs
+
+                return True
         return False
 
     def process(self):
