@@ -1,6 +1,9 @@
 import numpy as np
 import datetime
-from flowstats import cluster
+# NOTE: we don't import cluster here because it causes an
+# issue with PyCUDA and our daemonize procedure, see
+# the hdp function for where this is actually imported
+# from flowstats import cluster
 import json
 
 PROCESS_LIST = {
@@ -48,6 +51,10 @@ def hdp(process_request):
                 sample_metadata[s.sample_id]['compensation'] = s.compensation
 
     n_data_sets = len(data_sets)
+
+    # NOTE: we import this here to avoid a PyCUDA issue when starting up
+    # the daemonize procedure
+    from flowstats import cluster
 
     model = cluster.HDPMixtureModel(
         cluster_count,
