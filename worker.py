@@ -108,14 +108,15 @@ class Worker(Daemon):
 
         # First, see if the ReFlow server already has stuff assigned to us
         try:
-            query_assignment_response = utils.query_pr_assignment(
+            query_assignment_response = utils.get_assigned_process_requests(
                 self.host,
                 self.token)
-            if query_assignment_response['data']['assignment']:
+            if len(query_assignment_response['data']) > 0:
+                # get the 1st PR in the list
                 pr_response = utils.get_process_request(
                     self.host,
                     self.token,
-                    request['id'])
+                    query_assignment_response['data'][0]['id'])
                 self.assigned_pr = ProcessRequest(
                     self.host,
                     self.token,
