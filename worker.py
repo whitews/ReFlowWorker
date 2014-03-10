@@ -105,6 +105,27 @@ class Worker(Daemon):
     def __loop(self):
         # Once inside the loop, try, pun intended, VERY hard not to exit,
         # just capture and log all Exceptions and Errors
+
+        # First, see if the ReFlow server already has stuff assigned to us
+        try:
+            query_assignment_response = utils.query_pr_assignment(
+                self.host,
+                self.token)
+            if query_assignment_response['data']['assignment']:
+                pr_response = utils.get_process_request(
+                    self.host,
+                    self.token,
+                    request['id'])
+                self.assigned_pr = ProcessRequest(
+                    self.host,
+                    self.token,
+                    pr_response['data'])
+        except Exception as e:
+            logging.warning("Exception: ", e.message)
+            time.sleep(self.sleep)
+            return
+
+        # If we don't already have an assignment, see if any work is available
         if self.assigned_pr is None:
             try:
                 viable_requests = utils.get_viable_process_requests(
