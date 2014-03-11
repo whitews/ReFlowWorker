@@ -101,6 +101,8 @@ class Worker(Daemon):
     def _run(self):
         while True:
             self.__loop()
+            if self.assigned_pr is None:
+                time.sleep(self.sleep)
 
     def __loop(self):
         # Once inside the loop, try, pun intended, VERY hard not to exit,
@@ -123,7 +125,6 @@ class Worker(Daemon):
                     pr_response['data'])
         except Exception as e:
             logging.warning("Exception: ", e.message)
-            time.sleep(self.sleep)
             return
 
         # If we don't already have an assignment, see if any work is available
@@ -134,24 +135,20 @@ class Worker(Daemon):
                     self.token)
             except Exception as e:
                 logging.warning("Exception: ", e.message)
-                time.sleep(self.sleep)
                 return
 
             if not 'data' in viable_requests:
                 logging.warning(
                     "Malformed response from ReFlow server attempting " +
                     "to get viable process requests.")
-                time.sleep(self.sleep)
                 return
             if not isinstance(viable_requests['data'], list):
                 logging.warning(
                     "Malformed response from ReFlow " +
                     "server attempting to get viable process requests.")
-                time.sleep(self.sleep)
                 return
 
             if not len(viable_requests['data']) > 0:
-                time.sleep(self.sleep)
                 return
 
             for request in viable_requests['data']:
@@ -178,17 +175,10 @@ class Worker(Daemon):
                         self.token,
                         request['id'])
                     if verify_assignment_response['data']['assignment']:
-                        pr_response = utils.get_process_request(
-                            self.host,
-                            self.token,
-                            request['id'])
-                        self.assigned_pr = ProcessRequest(
-                            self.host,
-                            self.token,
-                            pr_response['data'])
+                        # we've got assignment, stop iterating over viable
+                        break
                 except Exception as e:
                     logging.warning("Exception: ", e.message)
-                    time.sleep(self.sleep)
                     return
         else:
             # We've got something to do!
@@ -274,8 +264,6 @@ class Worker(Daemon):
             self.assigned_pr = None
             self.errors = list()
             return
-        if self.assigned_pr is None:
-            time.sleep(self.sleep)
 
     def validate_inputs(self):
         """
