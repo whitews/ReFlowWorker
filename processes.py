@@ -51,6 +51,9 @@ def hdp(process_request):
                 sample_metadata[s.sample_id]['compensation'] = s.compensation
 
     n_data_sets = len(data_sets)
+    if not n_data_sets:
+        # nothing for us to do, return True
+        return True
 
     # NOTE: we import this here to avoid a PyCUDA issue when starting up
     # the daemonize procedure
