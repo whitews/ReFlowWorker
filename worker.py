@@ -11,7 +11,7 @@ from processes import PROCESS_LIST, dispatch_process
 
 WORKER_CONF = '/etc/reflow_worker.conf'
 WORKER_LOG = '/var/log/reflow_worker.log'
-DEFAULT_SLEEP = 5  # in seconds
+DEFAULT_SLEEP = 15  # in seconds
 
 
 class Worker(Daemon):
