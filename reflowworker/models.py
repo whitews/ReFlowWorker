@@ -127,6 +127,13 @@ class ProcessRequest(object):
     def normalize_transformed_samples(self):
         directory = self.directory + '/preprocessed/normalized'
 
+        request_params = []
+        for pr_input in self.inputs:
+            if pr_input['category_name'] == 'filtering':
+                if pr_input['implementation_name'] == 'parameters':
+                    if pr_input['input_name'] == 'parameter':
+                        request_params.append(pr_input['value'])
+
         # get distinct list of parameters common to all panels in this PR
         param_set = set()
         for panel in self.panels:
@@ -153,7 +160,10 @@ class ProcessRequest(object):
                     fluoro = param['fluorochrome']['fluorochrome_abbreviation']
                     param_str = "_".join([param_str, fluoro])
 
-                param_set.add(param_str)
+                # limit the set to the requested params filter
+                if param_str in request_params:
+                    param_set.add(param_str)
+
                 param['full_name'] = param_str
 
         # the param_list will be the normalized order of parameters
