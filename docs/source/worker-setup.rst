@@ -76,6 +76,6 @@ Setting Up a Worker on an Ubuntu 12.04 LTS system
         }
 
 
-#.  As root, from the ``ReFlowRESTClient/reflowrestclient/processing`` directory, start the worker:
+#.  As root, from the ``ReFlowWorker/reflowworker`` directory, start the worker:
 
     ``python worker.py start``
