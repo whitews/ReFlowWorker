@@ -12,20 +12,26 @@ class ProcessRequest(object):
     A process request from a ReFlow server.
     Contains the list of Samples and a list of process input key/values
     """
+
+    REQUIRED_CATEGORIES = ['transformation', 'clustering']
+
     def __init__(self, host, token, pr_dict):
         self.host = host
         self.token = token
         self.process_request_id = pr_dict['id']
+        self.sample_collection_id = pr_dict['sample_collection']
         self.directory = "%s%s/process_requests/%s" % (
             BASE_DIR,
             self.host,
             self.process_request_id)
-        self.process_id = pr_dict['process']
         self.inputs = pr_dict['inputs']
         self.use_fcs = False
         self.samples = list()
         self.panels = dict()
-        self.required_inputs = None  # will be populated with dict in worker
+        self.transformation = None
+        self.transformation_options = {}
+        self.clustering = None
+        self.clustering_options = {}
 
         # the param_list will be the normalized order of parameters
         self.param_list = list()
@@ -35,110 +41,21 @@ class ProcessRequest(object):
         self.panel_maps = dict()
 
         self.results_directory = self.directory + "/results"
-        self.__setup()
-
-    def __setup(self):
-        """
-        Essentially populates the list of samples based on the inputs.
-        The following keys will be used to filter the samples:
-            'project_panel'
-            'site' ***
-            'site_panel' ***
-            'subject' ***
-            'visit' ***
-            'specimen' ***
-            'stimulation' ***
-            'storage' ***
-            'cytometer' ***
-            'acquisition_date' ***
-        Note that these keys(***) can appear more than once, i.e. more than one
-        site panel.
-        """
 
         if not os.path.exists(self.results_directory):
             os.makedirs(self.results_directory)
 
-        project_panel = None
-        sites = list()
-        site_panels = list()
-        subjects = list()
-        visits = list()
-        specimens = list()
-        storages = list()
-        pretreatments = list()
-        stimulations = list()
-        cytometers = list()
-        acquisition_dates = list()
-
-        for i in self.inputs:
-            if i['key'] == 'project_panel' and not project_panel:
-                project_panel = i['value']
-            elif i['key'] == 'use_fcs':
-                if i['value'] == 'True':
-                    self.use_fcs = True
-            elif i['key'] == 'site':
-                sites.append(i['value'])
-            elif i['key'] == 'site_panel':
-                site_panels.append(i['value'])
-            elif i['key'] == 'subject':
-                subjects.append(i['value'])
-            elif i['key'] == 'visit':
-                visits.append(i['value'])
-            elif i['key'] == 'specimen':
-                specimens.append(i['value'])
-            elif i['key'] == 'storage':
-                storages.append(i['value'])
-            elif i['key'] == 'pretreatment':
-                pretreatments.append(i['value'])
-            elif i['key'] == 'stimulation':
-                stimulations.append(i['value'])
-            elif i['key'] == 'cytometer':
-                cytometers.append(i['value'])
-            elif i['key'] == 'acquisition_date':
-                acquisition_dates.append(i['value'])
-
-        # start with the project panel and get all those samples
-        response = utils.get_samples(
+        # lookup the sample collection
+        response = utils.get_sample_collection(
             self.host,
             self.token,
-            project_panel_pk=project_panel)
+            sample_collection_pk=self.sample_collection_id
+        )
         if not 'data' in response:
             return
 
-        for sample_dict in response['data']:
-            sample = Sample(self.host, self, sample_dict)
-            
-            # keep in mind the key/value inputs are strings
-            if len(sites) > 0:
-                if not str(sample.site_id) in sites:
-                    continue
-            if len(site_panels) > 0:
-                if not str(sample.site_panel_id) in site_panels:
-                    continue
-            if len(subjects) > 0:
-                if not str(sample.subject_id) in subjects:
-                    continue
-            if len(visits) > 0:
-                if not str(sample.visit_id) in visits:
-                    continue
-            if len(specimens) > 0:
-                if not str(sample.specimen_id) in specimens:
-                    continue
-            if len(storages) > 0:
-                if not str(sample.storage) in storages:
-                    continue
-            if len(pretreatments) > 0:
-                if not str(sample.pretreatment) in pretreatments:
-                    continue
-            if len(stimulations) > 0:
-                if not str(sample.stimulation_id) in stimulations:
-                    continue
-            if len(cytometers) > 0:
-                if not str(sample.cytometer_id) in cytometers:
-                    continue
-            if len(acquisition_dates) > 0:
-                if not str(sample.acquisition_date) in acquisition_dates:
-                    continue
+        for member in response['data']['members']:
+            sample = Sample(self.host, self, member['sample'])
 
             self.samples.append(sample)
             if not sample.site_panel_id in self.panels:
@@ -149,6 +66,38 @@ class ProcessRequest(object):
                 if not 'data' in response:
                     continue
                 self.panels[sample.site_panel_id] = panel_response['data']
+
+    def validate_inputs(self):
+        # iterate through the inputs to validate:
+        #     - all the required categories are present
+        #     - there are no mixed implementations
+        #     - the input values are the correct type
+
+        for pr_input in self.inputs:
+            if pr_input['category_name'] in ProcessRequest.REQUIRED_CATEGORIES:
+                if pr_input['category_name'] == 'transformation':
+                    if not self.transformation:
+                        self.transformation = pr_input['implementation_name']
+                    elif self.transformation != pr_input['implementation_name']:
+                        # mixed implementations aren't allowed
+                        return False
+                    self.transformation_options[pr_input['input_name']] = pr_input['value']
+                elif pr_input['category_name'] == 'clustering':
+                    if not self.clustering:
+                        self.clustering = pr_input['implementation_name']
+                    elif self.clustering != pr_input['implementation_name']:
+                        # mixed implementations aren't allowed
+                        return False
+                    self.clustering_options[pr_input['input_name']] = pr_input['value']
+
+
+                # TODO: validate value against value_type
+
+        if not (self.transformation and self.clustering):
+            # one or more required categories are missing
+            return False
+
+        return True
 
     def download_samples(self):
         if self.use_fcs:
@@ -167,10 +116,13 @@ class ProcessRequest(object):
             for s in self.samples:
                 s.compensate_subsample(self.token, directory)
 
-    def apply_logicle_transform(self, logicle_t, logicle_w):
+    def apply_logicle_transform(self):
         directory = self.directory + '/preprocessed/transformed'
         for s in self.samples:
-            s.apply_logicle_transform(directory, logicle_t, logicle_w)
+            s.apply_logicle_transform(
+                directory,
+                int(self.transformation_options['t']),
+                float(self.transformation_options['w']))
 
     def normalize_transformed_samples(self):
         directory = self.directory + '/preprocessed/normalized'

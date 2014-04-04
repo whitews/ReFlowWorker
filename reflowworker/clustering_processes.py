@@ -1,36 +1,16 @@
 import numpy as np
-import datetime
 # NOTE: we don't import cluster here because it causes an
 # issue with PyCUDA and our daemonize procedure, see
 # the hdp function for where this is actually imported
 # from flowstats import cluster
 import json
 
-PROCESS_LIST = {
-    1: 'Test',
-    2: 'HDP'
-}
-
-
-def test(process_request):
-    if not process_request:
-        return False
-    return True
-
 
 def hdp(process_request):
-    logicle_t = int(process_request.required_inputs['logicle_t'])
-    logicle_w = float(process_request.required_inputs['logicle_w'])
-    iteration_count = int(process_request.required_inputs['iteration_count'])
-    cluster_count = int(process_request.required_inputs['cluster_count'])
-    burn_in = int(process_request.required_inputs['burn_in'])
-    random_seed = int(process_request.required_inputs['random_seed'])
-
-    process_request.compensate_samples()
-    process_request.apply_logicle_transform(
-        logicle_t=logicle_t,
-        logicle_w=logicle_w)
-    process_request.normalize_transformed_samples()
+    iteration_count = int(process_request.clustering_options['iteration_count'])
+    cluster_count = int(process_request.clustering_options['cluster_count'])
+    burn_in = int(process_request.clustering_options['burnin'])
+    random_seed = int(process_request.clustering_options['random_seed'])
 
     data_sets = list()
     sample_id_map = list()
@@ -64,9 +44,6 @@ def hdp(process_request):
         iteration_count,
         burn_in)
 
-    time_0 = datetime.datetime.now()
-    print time_0
-
     results = model.fit(
         data_sets,
         True,
@@ -75,13 +52,10 @@ def hdp(process_request):
         verbose=True
     )
 
-    time_1 = datetime.datetime.now()
-
-    delta_time = time_1 - time_0
-    print delta_time.total_seconds()
-
     metadata = dict()
-    metadata['input_parameters'] = process_request.required_inputs
+
+    # TODO: re-org this to the Worker
+    metadata['input_parameters'] = process_request.clustering_options
     metadata['fcs_parameters'] = process_request.param_list
     metadata['panel_maps'] = process_request.panel_maps
     metadata['samples'] = sample_metadata
@@ -152,9 +126,3 @@ def hdp(process_request):
         json.dump(average_dict, output_file, indent=2)
         output_file.close()
     return True
-
-
-dispatch_process = {
-    1: test,
-    2: hdp
-}

@@ -6,9 +6,11 @@ import os
 
 from reflowrestclient import utils
 
+# utils.METHOD = 'http://'
+
 from daemon import Daemon
 from models import ProcessRequest
-from processes import PROCESS_LIST, dispatch_process
+from clustering_processes import hdp
 
 WORKER_CONF = '/etc/reflow_worker.conf'
 WORKER_LOG = '/var/log/reflow_worker.log'
@@ -183,9 +185,9 @@ class Worker(Daemon):
                     return
         else:
             # We've got something to do!
-            are_inputs_valid = self.validate_inputs()
 
-            if not are_inputs_valid:
+            # First, validate the inputs
+            if not self.assigned_pr.validate_inputs():
                 logging.warning(
                     "Invalid input values for process request")
                 self.report_errors()
@@ -266,53 +268,33 @@ class Worker(Daemon):
             self.errors = list()
             return
 
-    def validate_inputs(self):
-        """
-        It will be called after the Worker is assigned a ProcessRequest.
-        Returns True if the inputs are valid, else returns False
-        """
-        if self.assigned_pr.process_id in PROCESS_LIST:
-            if PROCESS_LIST[self.assigned_pr.process_id] == 'Test':
-                return True
-            if PROCESS_LIST[self.assigned_pr.process_id] == 'HDP':
-                # should have inputs:
-                #     cluster_count
-                #     iteration_count
-                #     burn_in
-                #     logicle_t
-                #     logicle_w
-                #     random_seed
-                required_inputs = {
-                    'cluster_count': False,
-                    'iteration_count': False,
-                    'burn_in': False,
-                    'logicle_t': False,
-                    'logicle_w': False,
-                    'random_seed': False
-                }
-
-                for pr_input in self.assigned_pr.inputs:
-                    if pr_input['key'] in required_inputs.keys():
-                        required_inputs[pr_input['key']] = pr_input['value']
-                for key in required_inputs:
-                    if required_inputs[key] is False:
-                        logging.error(
-                            "Missing required input '%s' for HDP process" % key)
-                        return False
-                self.assigned_pr.required_inputs = required_inputs
-
-                return True
-        return False
-
     def process(self):
         """
-        It will be called after when the Worker has an assigned ProcessRequest.
-        Define all the processing tasks here.
+        Called after validate_inputs
+        Calls to all the processing sub-tasks are made here.
         """
-        if self.assigned_pr.process_id in PROCESS_LIST:
-            process = dispatch_process[self.assigned_pr.process_id]
-            return process(self.assigned_pr)
-        return False
+
+        # first we compensate
+        self.assigned_pr.compensate_samples()
+
+        # next is transformation
+        if self.assigned_pr.transformation == 'logicle':
+            self.assigned_pr.apply_logicle_transform()
+        else:
+            # for now only logicle is implemented, asinch will be added in the future
+            return False
+
+        # next is normalization of common sample parameters
+        self.assigned_pr.normalize_transformed_samples()
+
+        # next is clustering
+        if self.assigned_pr.clustering == 'hdp':
+            hdp(self.assigned_pr)
+        else:
+            # only HDP is implemented at this time
+            return False
+
+        return True
 
     def report_errors(self):
         """
@@ -354,7 +336,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 2:
         if 'start' == sys.argv[1]:
-            worker.start(debug=False)
+            worker.start(debug=True)
         elif 'stop' == sys.argv[1]:
             worker.stop()
         elif 'restart' == sys.argv[1]:
