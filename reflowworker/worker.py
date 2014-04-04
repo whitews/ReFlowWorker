@@ -4,8 +4,9 @@ import sys
 import time
 import os
 
-from reflowrestclient.processing.daemon import Daemon
 from reflowrestclient import utils
+
+from daemon import Daemon
 from models import ProcessRequest
 from processes import PROCESS_LIST, dispatch_process
 
