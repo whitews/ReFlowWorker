@@ -336,7 +336,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 2:
         if 'start' == sys.argv[1]:
-            worker.start(debug=True)
+            worker.start(debug=False)
         elif 'stop' == sys.argv[1]:
             worker.stop()
         elif 'restart' == sys.argv[1]:
