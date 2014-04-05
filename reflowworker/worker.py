@@ -6,7 +6,7 @@ import os
 
 from reflowrestclient import utils
 
-utils.METHOD = 'http://'
+#utils.METHOD = 'http://'
 
 from daemon import Daemon
 from models import ProcessRequest
