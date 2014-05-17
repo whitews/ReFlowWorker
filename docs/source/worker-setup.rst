@@ -27,7 +27,7 @@ Setting Up a Worker on an Ubuntu 12.04 LTS system
 
 #.  Download CUDA 5.5:
 
-    ````curl -O http://developer.download.nvidia.com/compute/cuda/5_5/rel/installers/cuda_5.5.22_linux_64.run``
+    ``curl -O http://developer.download.nvidia.com/compute/cuda/5_5/rel/installers/cuda_5.5.22_linux_64.run``
 
 #.  Make the installer executable:
 
