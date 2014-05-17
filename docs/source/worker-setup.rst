@@ -84,6 +84,7 @@ Setting Up a Worker on an Ubuntu 12.04 LTS system
 #.  Clone the gpustats, dpmix, FlowIO, FlowUtils, FlowStats, and ReFlowRESTClient repos:
 
     ::
+    
         git clone --recursive http://git.tiker.net/trees/pycuda.git
         git clone https://github.com/dukestats/gpustats.git
         git clone https://github.com/andrewcron/dpmix.git
