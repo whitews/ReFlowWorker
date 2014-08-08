@@ -243,9 +243,6 @@ class Sample(object):
         self.subject_id = sample_dict['subject']
         self.subject_code = sample_dict['subject_code']
 
-        self.project_panel_id = sample_dict['project_panel']
-        self.project_panel_name = sample_dict['panel_name']
-
         self.site_panel_id = sample_dict['site_panel']
 
     def download_subsample(self, token):

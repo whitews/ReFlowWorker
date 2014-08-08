@@ -127,7 +127,7 @@ class Worker(Daemon):
                     self.token,
                     pr_response['data'])
         except Exception as e:
-            logging.warning("Exception: ", e.message)
+            logging.warning("Exception: %s", e.message)
             return
 
         # If we don't already have an assignment, see if any work is available
@@ -281,7 +281,7 @@ class Worker(Daemon):
         if self.assigned_pr.transformation == 'logicle':
             self.assigned_pr.apply_logicle_transform()
         else:
-            # for now only logicle is implemented, asinch will be added in the future
+            # for now only logicle is implemented, asinh will be added in the future
             return False
 
         # next is normalization of common sample parameters
@@ -321,7 +321,7 @@ class Worker(Daemon):
             if os.path.isfile(os.path.join(results_dir, f)):
                 results_files.append(f)
         for f in results_files:
-            utils.post_process_request_output(
+            response = utils.post_process_request_output(
                 self.host,
                 self.token,
                 self.assigned_pr.process_request_id,
