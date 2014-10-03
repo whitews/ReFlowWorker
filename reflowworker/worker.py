@@ -6,8 +6,6 @@ import os
 
 from reflowrestclient import utils
 
-#utils.METHOD = 'http://'
-
 from daemon import Daemon
 from models import ProcessRequest
 from clustering_processes import hdp
@@ -81,11 +79,22 @@ class Worker(Daemon):
             logging.error("Exiting since worker token not found")
             sys.exit(1)
 
+        # look for the server protocol, http or https
+        if 'method' in worker_json:
+            self.method = utils.METHOD[worker_json['method']]
+        else:
+            # default is https
+            self.method = utils.METHOD['https']
+
         # verify worker with the host
         # catching all exceptions here, since if anything goes wrong
         # we should not continue
         try:
-            result = utils.verify_worker(self.host, self.token)
+            result = utils.verify_worker(
+                self.host,
+                self.token,
+                method=self.method
+            )
             self.genuine = result['data']['worker']  # should be True
             if self.genuine is not True:
                 raise Exception
@@ -115,17 +124,23 @@ class Worker(Daemon):
         try:
             query_assignment_response = utils.get_assigned_process_requests(
                 self.host,
-                self.token)
+                self.token,
+                method=self.method
+            )
             if len(query_assignment_response['data']) > 0:
                 # get the 1st PR in the list
                 pr_response = utils.get_process_request(
                     self.host,
                     self.token,
-                    query_assignment_response['data'][0]['id'])
+                    query_assignment_response['data'][0]['id'],
+                    method=self.method
+                )
                 self.assigned_pr = ProcessRequest(
                     self.host,
                     self.token,
-                    pr_response['data'])
+                    pr_response['data'],
+                    self.method
+                )
         except Exception as e:
             logging.warning("Exception: %s", e.message)
             return
@@ -135,7 +150,9 @@ class Worker(Daemon):
             try:
                 viable_requests = utils.get_viable_process_requests(
                     self.host,
-                    self.token)
+                    self.token,
+                    method=self.method
+                )
             except Exception as e:
                 logging.warning("Exception: ", e.message)
                 return
@@ -160,7 +177,9 @@ class Worker(Daemon):
                     assignment_response = utils.request_pr_assignment(
                         self.host,
                         self.token,
-                        request['id'])
+                        request['id'],
+                        method=self.method
+                    )
                 except Exception as e:
                     logging.warning("Exception: ", e.message)
 
@@ -176,7 +195,9 @@ class Worker(Daemon):
                     verify_assignment_response = utils.verify_pr_assignment(
                         self.host,
                         self.token,
-                        request['id'])
+                        request['id'],
+                        method=self.method
+                    )
                     if verify_assignment_response['data']['assignment']:
                         # we've got assignment, stop iterating over viable
                         break
@@ -213,7 +234,9 @@ class Worker(Daemon):
                 verify_assignment_response = utils.verify_pr_assignment(
                     self.host,
                     self.token,
-                    self.assigned_pr.process_request_id)
+                    self.assigned_pr.process_request_id,
+                    method=self.method
+                )
                 if not verify_assignment_response['data']['assignment']:
                     # we're not assigned anymore, delete our PR and return
                     self.assigned_pr = None
@@ -234,7 +257,9 @@ class Worker(Daemon):
                 verify_complete_response = utils.complete_pr_assignment(
                     self.host,
                     self.token,
-                    self.assigned_pr.process_request_id)
+                    self.assigned_pr.process_request_id,
+                    method=self.method
+                )
                 if verify_complete_response['status'] != 200:
                     # something went wrong
                     raise Exception("Server rejected our 'Complete' request")
@@ -247,7 +272,9 @@ class Worker(Daemon):
                 r = utils.get_process_request(
                     self.host,
                     self.token,
-                    self.assigned_pr.process_request_id)
+                    self.assigned_pr.process_request_id,
+                    method=self.method
+                )
                 if not 'data' in r:
                     raise Exception("Improper host response, no 'data' key")
                 if not 'status' in r['data']:
@@ -280,8 +307,10 @@ class Worker(Daemon):
         # next is transformation
         if self.assigned_pr.transformation == 'logicle':
             self.assigned_pr.apply_logicle_transform()
+        elif self.assigned_pr.transformation == 'asinh':
+            self.assigned_pr.apply_asinh_transform()
         else:
-            # for now only logicle is implemented, asinh will be added in the future
+            # got some unsupported transform type
             return False
 
         # next is normalization of common sample parameters
@@ -325,7 +354,8 @@ class Worker(Daemon):
                 self.host,
                 self.token,
                 self.assigned_pr.process_request_id,
-                os.path.join(results_dir, f)
+                os.path.join(results_dir, f),
+                method=self.method
             )
         return
 
@@ -336,7 +366,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 2:
         if 'start' == sys.argv[1]:
-            worker.start(debug=False)
+            worker.start(debug=True)
         elif 'stop' == sys.argv[1]:
             worker.stop()
         elif 'restart' == sys.argv[1]:

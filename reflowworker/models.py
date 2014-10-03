@@ -15,9 +15,10 @@ class ProcessRequest(object):
 
     REQUIRED_CATEGORIES = ['transformation', 'clustering']
 
-    def __init__(self, host, token, pr_dict):
+    def __init__(self, host, token, pr_dict, method):
         self.host = host
         self.token = token
+        self.method = method  # 'http://' or 'https://'
         self.process_request_id = pr_dict['id']
         self.sample_collection_id = pr_dict['sample_collection']
         self.directory = "%s%s/process_requests/%s" % (
@@ -49,7 +50,8 @@ class ProcessRequest(object):
         response = utils.get_sample_collection(
             self.host,
             self.token,
-            sample_collection_pk=self.sample_collection_id
+            sample_collection_pk=self.sample_collection_id,
+            method=self.method
         )
         if not 'data' in response:
             return
@@ -62,7 +64,9 @@ class ProcessRequest(object):
                 panel_response = utils.get_site_panel(
                     self.host,
                     self.token,
-                    sample.site_panel_id)
+                    sample.site_panel_id,
+                    method=self.method
+                )
                 if not 'data' in response:
                     continue
                 self.panels[sample.site_panel_id] = panel_response['data']
@@ -74,28 +78,29 @@ class ProcessRequest(object):
         #     - the input values are the correct type
 
         for pr_input in self.inputs:
-            if pr_input['category_name'] in ProcessRequest.REQUIRED_CATEGORIES:
-                if pr_input['category_name'] == 'transformation':
-                    if not self.transformation:
-                        self.transformation = pr_input['implementation_name']
-                    elif self.transformation != pr_input['implementation_name']:
-                        # mixed implementations aren't allowed
-                        return False
-                    self.transformation_options[pr_input['input_name']] = pr_input['value']
-                elif pr_input['category_name'] == 'clustering':
-                    if not self.clustering:
-                        self.clustering = pr_input['implementation_name']
-                    elif self.clustering != pr_input['implementation_name']:
-                        # mixed implementations aren't allowed
-                        return False
-                    self.clustering_options[pr_input['input_name']] = pr_input['value']
-
+            if pr_input['category_name'] == 'transformation':
+                if not self.transformation:
+                    self.transformation = pr_input['implementation_name']
+                elif self.transformation != pr_input['implementation_name']:
+                    # mixed implementations aren't allowed
+                    return False
+                self.transformation_options[pr_input['input_name']] = pr_input['value']
+            elif pr_input['category_name'] == 'clustering':
+                if not self.clustering:
+                    self.clustering = pr_input['implementation_name']
+                elif self.clustering != pr_input['implementation_name']:
+                    # mixed implementations aren't allowed
+                    return False
+                self.clustering_options[pr_input['input_name']] = pr_input['value']
 
                 # TODO: validate value against value_type
 
-        if not (self.transformation and self.clustering):
-            # one or more required categories are missing
+        if not self.clustering:
+            # clustering category is required, but missing
             return False
+
+        if not self.transformation:
+            self.transformation = 'asinh'  # default xform is asinh
 
         return True
 
@@ -123,6 +128,15 @@ class ProcessRequest(object):
                 directory,
                 int(self.transformation_options['t']),
                 float(self.transformation_options['w']))
+
+    def apply_asinh_transform(self):
+        """
+        Inverse hyperbolic sine transformation with a pre-scale factor
+        for optimum visualization (and similarity to the logicle transform)
+        """
+        directory = self.directory + '/preprocessed/transformed'
+        for s in self.samples:
+            s.apply_asinh_transform(directory)
 
     def normalize_transformed_samples(self):
         directory = self.directory + '/preprocessed/normalized'
@@ -268,7 +282,9 @@ class Sample(object):
                     token,
                     sample_pk=self.sample_id,
                     data_format='npy',
-                    directory=download_dir)
+                    directory=download_dir,
+                    method=self.process_request.method
+                )
             except Exception, e:
                 print e
                 return False
@@ -299,7 +315,9 @@ class Sample(object):
                     token,
                     sample_pk=self.sample_id,
                     data_format='fcs',
-                    directory=download_dir)
+                    directory=download_dir,
+                    method=self.process_request.method
+                )
             except Exception, e:
                 print e
                 return False
@@ -317,7 +335,9 @@ class Sample(object):
             self.host,
             token,
             sample_pk=self.sample_id,
-            key='spill')
+            key='spill',
+            method=self.process_request.method
+        )
 
         spill_text = None
         if len(spill_resp['data']) > 0:
@@ -345,7 +365,9 @@ class Sample(object):
         sp_resp = utils.get_site_panel(
             self.host,
             token,
-            self.site_panel_id)
+            self.site_panel_id,
+            method=self.process_request.method
+        )
         if not len(sp_resp['data']) > 0:
             print "No site panel was found."
             return False
@@ -387,7 +409,9 @@ class Sample(object):
                 token,
                 compensation_pk=self.compensation_id,
                 data_format='npy',
-                directory=download_dir)
+                directory=download_dir,
+                method=self.process_request.method
+            )
         except Exception, e:
             print e
             return False
@@ -423,7 +447,8 @@ class Sample(object):
                 self.host,
                 token,
                 site_panel_pk=self.site_panel_id,
-                acquisition_date=self.acquisition_date
+                acquisition_date=self.acquisition_date,
+                method=self.process_request.method
             )
             if len(comps['data']) > 0:
                 # found a match, set the comp for this sample
@@ -570,6 +595,63 @@ class Sample(object):
         )
 
         transformed_path = "%s/logicle_%s.npy" % (
+            directory,
+            str(self.sample_id)
+        )
+        numpy.save(transformed_path, x_data)
+
+        self.transformed_path = transformed_path
+
+        return True
+
+    def apply_asinh_transform(self, directory, pre_scale=0.01, use_comp=True):
+        """
+        Transforms sample data
+
+        By default, the compensated data will be transformed and the default
+        pre-scale factor is 1/100
+
+        Returns False if the transformation fails or if the directory given
+        cannot be created
+        """
+
+        if not self.host or not self.sample_id:
+            return False
+
+        if use_comp:
+            if not (self.compensated_path and os.path.exists(self.compensated_path)):
+                return False
+            else:
+                data = numpy.load(self.compensated_path)
+        else:
+            if not (self.subsample_path and os.path.exists(self.subsample_path)):
+                return False
+            else:
+                data = numpy.load(self.subsample_path)
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        # don't transform scatter, time, or null channels
+        panel = self.process_request.panels[self.site_panel_id]
+        if 'parameters' not in panel:
+            return False
+        indices = list()
+        for param in panel['parameters']:
+            if 'parameter_value_type' not in param:
+                return False
+            if param['parameter_type'] in ['FSC', 'SSC', 'TIM', 'NUL']:
+                continue
+            else:
+                indices.append(param['fcs_number'] - 1)
+
+        x_data = flowutils.transforms.asinh(
+            data,
+            indices,
+            pre_scale=pre_scale
+        )
+
+        transformed_path = "%s/asinh_%s.npy" % (
             directory,
             str(self.sample_id)
         )

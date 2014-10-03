@@ -59,6 +59,7 @@ def hdp(process_request):
     metadata['fcs_parameters'] = process_request.param_list
     metadata['panel_maps'] = process_request.panel_maps
     metadata['samples'] = sample_metadata
+    # TODO: add asinh prescale (if used) to results metadata
 
     archive_dict = dict()
     archive_dict['metadata'] = metadata
