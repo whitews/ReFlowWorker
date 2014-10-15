@@ -208,6 +208,32 @@ class ProcessRequest(object):
     def set_clusters(self, clusters):
         self.clusters = clusters
 
+    def post_clusters(self):
+        """
+        POST all clusters and sample clusters (with event classifications)
+        to the ReFlow server. This should only be called after local
+        processing has finished.
+        """
+        # first post the Cluster instances to get their ReFlow PKs
+        for c in self.clusters:
+            # POST only if it has no PK
+            if not c.reflow_pk:
+                # after trying to POST, if no PK we return False
+                if not c.post(
+                        self.host,
+                        self.token,
+                        self.method,
+                        self.process_request_id
+                ):
+                    return False
+
+            # now save all the sample clusters
+            for sc in c.sample_clusters:
+                if not sc.post(self.host, self.token, self.method, c.reflow_pk):
+                    return False
+
+        return True
+
 
 class Sample(object):
     """
@@ -723,15 +749,18 @@ class Cluster(object):
     def add_sample_cluster(self, sample_cluster):
         self.sample_clusters.append(sample_cluster)
 
-    def post(self, host, token, process_request_id):
+    def post(self, host, token, method, process_request_id):
         response = utils.post_cluster(
             host,
             token,
             process_request_id,
-            self.index
+            self.index,
+            method=method
         )
 
-        if response.status == 201:
+        if not 'status' in response:
+            return False
+        if response['status'] == 201:
             self.reflow_pk = response['data']['id']
             return True
 
@@ -747,7 +776,30 @@ class SampleCluster(object):
     def __init__(self, sample_id, parameters, event_indices):
         self.sample_id = sample_id
         self.parameters = parameters
-        self.event_indices = event_indices
+        self.event_indices = [int(x) for x in event_indices]
+
+    def post(self, host, token, method, cluster_id):
+        param_dict = dict()
+
+        for p in self.parameters:
+            param_dict[p.channel] = p.location
+
+        response = utils.post_sample_cluster(
+            host,
+            token,
+            cluster_id,
+            self.sample_id,
+            param_dict,
+            self.event_indices,
+            method=method
+        )
+
+        if not 'status' in response:
+            return False
+        if response['status'] == 201:
+            return True
+
+        return False
 
 
 class SampleClusterParameter(object):

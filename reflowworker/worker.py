@@ -340,6 +340,8 @@ class Worker(Daemon):
         if self.assigned_pr is None:
             return
 
+        self.assigned_pr.post_clusters()
+
         # get list of files in the results dir for this PR id
         # all files in results will be uploaded to ReFlow as
         # ProcessOutputValue model instances, and these have 3 values:
