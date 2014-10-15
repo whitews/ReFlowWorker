@@ -220,14 +220,16 @@ class Worker(Daemon):
 
             # Stub method to process the data
             try:
-                process_status = self.process()
+                clusters = self.process()
             except Exception, e:
                 logging.exception(e.message)
                 self.report_errors()
                 return
 
-            if not process_status:
+            if not clusters:
                 self.report_errors()
+            else:
+                self.assigned_pr.set_clusters(clusters)
 
             # Verify assignment once again
             try:
@@ -318,12 +320,12 @@ class Worker(Daemon):
 
         # next is clustering
         if self.assigned_pr.clustering == 'hdp':
-            hdp(self.assigned_pr)
+            clusters = hdp(self.assigned_pr)
         else:
             # only HDP is implemented at this time
             return False
 
-        return True
+        return clusters
 
     def report_errors(self):
         """

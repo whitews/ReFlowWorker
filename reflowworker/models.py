@@ -34,6 +34,10 @@ class ProcessRequest(object):
         self.clustering = None
         self.clustering_options = {}
 
+        # the results of the processing pipeline will be stored as
+        # a list of Cluster instances
+        self.clusters = list()
+
         # the param_list will be the normalized order of parameters
         self.param_list = list()
 
@@ -201,6 +205,9 @@ class ProcessRequest(object):
         for s in self.samples:
             s.create_normalized(directory, self.panel_maps[s.site_panel_id])
 
+    def set_clusters(self, clusters):
+        self.clusters = clusters
+
 
 class Sample(object):
     """
@@ -224,6 +231,11 @@ class Sample(object):
         self.compensated_path = None  # path to comp'd data (numpy)
         self.transformed_path = None  # path to transformed data (numpy)
         self.normalized_path = None  # path to normalized data (numpy)
+
+        # need to save sub-sampled indices for the clustering output
+        # if sample is using full FCS data, the indices aren't needed
+        self.is_subsampled = False
+        self.subsample_indices = None
 
         self.acquisition_date = sample_dict['acquisition_date']
         self.original_filename = sample_dict['original_filename']
@@ -290,6 +302,14 @@ class Sample(object):
                 return False
 
         self.subsample_path = subsample_path
+        self.is_subsampled = True
+
+        # get the sub-sampled indices
+        data = numpy.load(self.subsample_path)
+
+        # note the 1st data column are event indices
+        self.event_indices = data[:, 0]
+
         return True
 
     def download_fcs(self, token):
@@ -682,3 +702,58 @@ class Sample(object):
         numpy.save(normalized_path, norm_data)
 
         self.normalized_path = normalized_path
+
+
+class Cluster(object):
+    """
+    All processing pipelines must return a list of Cluster instances
+    that the parent ProcessRequest will POST to the ReFlow server
+    """
+    def __init__(self, cluster_index):
+        self.index = cluster_index
+
+        # will store the primary key from the ReFlow server after
+        # successful POST
+        self.reflow_pk = None
+
+        # a list of fresh SampleCluster instances
+        # each SampleCluster "assigns" a different Sample PK to this cluster
+        self.sample_clusters = list()
+
+    def add_sample_cluster(self, sample_cluster):
+        self.sample_clusters.append(sample_cluster)
+
+    def post(self, host, token, process_request_id):
+        response = utils.post_cluster(
+            host,
+            token,
+            process_request_id,
+            self.index
+        )
+
+        if response.status == 201:
+            self.reflow_pk = response['data']['id']
+            return True
+
+        return False
+
+
+class SampleCluster(object):
+    """
+    A SampleCluster ties a collection of sample events to a particular cluster.
+    Each sample can have an independent location for the parent cluster.
+    These locations are stored in SampleClusterParameter instances.
+    """
+    def __init__(self, sample_id, parameters, event_indices):
+        self.sample_id = sample_id
+        self.parameters = parameters
+        self.event_indices = event_indices
+
+
+class SampleClusterParameter(object):
+    """
+    Holds the cluster location for a particular Sample channel
+    """
+    def __init__(self, channel_number, location):
+        self.channel = channel_number
+        self.location = location

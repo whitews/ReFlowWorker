@@ -1,3 +1,5 @@
+from models import Cluster, SampleCluster, SampleClusterParameter
+
 import numpy as np
 # NOTE: we don't import cluster here because it causes an
 # issue with PyCUDA and our daemonize procedure, see
@@ -9,6 +11,12 @@ import json
 def hdp(process_request):
     iteration_count = int(process_request.clustering_options['iteration_count'])
     cluster_count = int(process_request.clustering_options['cluster_count'])
+
+    # initialize our list of Cluster instances
+    clusters = list()
+    for i in range(cluster_count):
+        clusters.append(Cluster(i))
+
     burn_in = int(process_request.clustering_options['burnin'])
     random_seed = int(process_request.clustering_options['random_seed'])
 
@@ -126,4 +134,45 @@ def hdp(process_request):
         output_file = open(file_path, 'wb')
         json.dump(average_dict, output_file, indent=2)
         output_file.close()
-    return True
+    else:
+        # this shouldn't really happen, it would mean that HDP was requested
+        # for one sample
+        results_avg = [results]
+
+    # update our list of clusters
+    # first iterate over our data sets to get the classified events
+    for i, sample in enumerate(process_request.samples):
+        classifications = results_avg[i].classify(data_sets[i])
+
+        # group event indices by cluster for this sample
+        event_map = dict()
+        for j, event_class in enumerate(classifications):
+            if event_class in event_map:
+                # append this event index to this sample cluster
+                event_map[event_class].append(sample.event_indices[j])
+            else:
+                # create a new map for this sample cluster
+                event_map[event_class] = [sample.event_indices[j]]
+
+        # now we have all the events for this sample classified and organized
+        # by cluster, so we can start creating the SampleCluster instances
+        for event_class in event_map:
+            # save SampleClusterParameter instances for this SampleCluster
+            parameters = list()
+            for k, channel in enumerate(process_request.panel_maps[sample.site_panel_id]):
+                parameters.append(
+                    SampleClusterParameter(
+                        channel_number=channel + 1,  # channel is an index
+                        location=results_avg.mus[event_class][k]
+                    )
+                )
+
+            clusters[event_class].add_sample_cluster(
+                SampleCluster(
+                    sample_id=sample.sample_id,
+                    parameters=parameters,
+                    event_indices=event_map[event_class]
+                )
+            )
+
+    return clusters
