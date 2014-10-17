@@ -12,7 +12,7 @@ setup(
     install_requires=[
         'requests>=1.1.0',
         'numpy>=1.6',
-        'reflowrestclient>=0.0.9',
+        'reflowrestclient',
         'flowio',
         'flowutils',
         'flowstats'
