@@ -1,4 +1,5 @@
 import os
+import re
 
 from reflowrestclient import utils
 import numpy
@@ -61,7 +62,8 @@ class ProcessRequest(object):
             return
 
         for member in response['data']['members']:
-            sample = Sample(self.host, self, member['sample'])
+            compensation = self.convert_matrix(member['compensation'])
+            sample = Sample(self, member['sample'], compensation)
 
             self.samples.append(sample)
             if not sample.site_panel_id in self.panels:
@@ -74,6 +76,29 @@ class ProcessRequest(object):
                 if not 'data' in response:
                     continue
                 self.panels[sample.site_panel_id] = panel_response['data']
+
+    @staticmethod
+    def convert_matrix(compensation_string):
+        """
+        Converts the comma delimited text string returned within
+        ReFlow's SampleCollection to a numpy array that the Sample
+        constructor needs
+        """
+        lines = compensation_string.splitlines(False)
+        headers = re.split(',', lines[0])
+        headers = [int(h) for h in headers]
+
+        # create numpy array and add headers
+        np_array = numpy.array(headers)
+
+        # now add the matrix data
+        for line in lines[1:]:
+            line_values = re.split(',', line)
+            for i, value in enumerate(line_values):
+                line_values[i] = float(line_values[i])
+            np_array = numpy.vstack([np_array, line_values])
+
+        return np_array
 
     def validate_inputs(self):
         # iterate through the inputs to validate:
@@ -120,7 +145,8 @@ class ProcessRequest(object):
         directory = self.directory + '/preprocessed/comp'
         if self.use_fcs:
             for s in self.samples:
-                s.conpensate_fcs(self.token, directory)
+                # TODO: implement compensate_fcs
+                s.compensate_fcs(self.token, directory)
         else:
             for s in self.samples:
                 s.compensate_subsample(self.token, directory)
@@ -241,16 +267,17 @@ class Sample(object):
     Used by a Worker to manage downloaded samples related to a
     ReFlow ProcessRequest
     """
-    def __init__(self, host, process_request, sample_dict):
+    def __init__(self, process_request, sample_dict, compensation):
         """
         host: the ReFlow host from which the sample originated
         sample_dict: the ReFlow 'data' dictionary
 
         Raises KeyError if sample_dict is incomplete
         """
-        self.host = host
+        self.host = process_request.host
         self.process_request = process_request
         self.sample_id = sample_dict['id']
+        self.compensation = compensation
 
         self.fcs_path = None  # path to downloaded FCS file
         self.subsample_path = None  # path to downloaded Numpy array
@@ -266,12 +293,6 @@ class Sample(object):
         self.acquisition_date = sample_dict['acquisition_date']
         self.original_filename = sample_dict['original_filename']
         self.sha1 = sample_dict['sha1']
-
-        self.compensation_id = sample_dict['compensation']
-
-        # Comp matrix of self.compensation_id, and if null may come from
-        # the FCS $SPILL element
-        self.compensation = None
 
         self.exclude = sample_dict['exclude']
 
@@ -371,161 +392,6 @@ class Sample(object):
         self.fcs_path = fcs_path
         return True
 
-    def _parse_fcs_spill(self, token):
-        """
-        Finds if a Sample has an FCS $SPILL value.
-        If found, returns the Numpy array with the sample's channel
-        numbers as the headers
-        """
-        spill_resp = utils.get_sample_metadata(
-            self.host,
-            token,
-            sample_pk=self.sample_id,
-            key='spill',
-            method=self.process_request.method
-        )
-
-        spill_text = None
-        if len(spill_resp['data']) > 0:
-            if 'value' in spill_resp['data'][0]:
-                spill_text = spill_resp['data'][0]['value']
-        if not spill_text:
-            return False
-
-        spill = spill_text.split(',')
-
-        n_markers = int(spill.pop(0))  # marker count
-        markers = spill[:n_markers]
-        matrix = spill[n_markers:]
-
-        if not len(matrix) == n_markers**2:
-            print "Wrong number of items in spill matrix"
-            return False
-
-        np_matrix = numpy.array([float(i) for i in matrix])
-        np_matrix = np_matrix.reshape(n_markers, n_markers)
-
-        # the spill text header uses PnN values to identify
-        # the channels, so get the sample's site panel which
-        # contains the FCS PnN info
-        sp_resp = utils.get_site_panel(
-            self.host,
-            token,
-            self.site_panel_id,
-            method=self.process_request.method
-        )
-        if not len(sp_resp['data']) > 0:
-            print "No site panel was found."
-            return False
-
-        # match the spill channels with the site panel, and
-        # save channel number in new header list
-        new_headers = markers
-        for param in sp_resp['data']['parameters']:
-            if param['fcs_text'] in markers:
-                i = markers.index(param['fcs_text'])
-                new_headers[i] = param['fcs_number']
-
-        new_headers = numpy.array(new_headers)
-        np_matrix = numpy.insert(np_matrix, 0, new_headers, 0)
-
-        return np_matrix
-
-    def _download_compensation(self, token):
-        # Compensation matrices are saved as Numpy arrays in a
-        # 'comp' sub-directory, and use the naming convention:
-        # 'comp_<id>.npy'
-        # A comp with a primary key of 42 will by 'comp_42.py'
-        # Note, this is not the sample's primary key
-        if not self.host or not self.sample_id or not self.compensation_id:
-            return False
-
-        if not self.subsample_path and os.path.exists(self.subsample_path):
-            return False
-
-        download_dir = BASE_DIR + str(self.host) + '/comp/'
-
-        if not os.path.exists(download_dir):
-            os.makedirs(download_dir)
-
-        # always re-download compensation, it may have changed on the server
-        try:
-            utils.download_compensation(
-                self.host,
-                token,
-                compensation_pk=self.compensation_id,
-                data_format='npy',
-                directory=download_dir,
-                method=self.process_request.method
-            )
-        except Exception, e:
-            print e
-            return False
-
-        if os.path.exists(download_dir + 'comp_%s.npy' % self.compensation_id):
-            return True
-
-        return False
-
-    def _populate_compensation(self, token):
-        """
-        Determines the compensation matrix and populates
-        self.compensation if found.
-
-        Note: Compensation matrix is chosen in the following order:
-            1st choice: self.compensation which comes from the Sample's
-                        directly related compensation relationship on the
-                        ReFlow host (self.host)
-            2nd choice: The first matching compensation matrix on the
-                        ReFlow host (self.host) which matches both the
-                        Sample's site panel and the Sample's acquisition date
-            3rd choice: The spillover matrix within the original FCS file
-
-        Returns True if successful
-        """
-
-        if not self.host or not self.sample_id:
-            return False
-
-        if not self.compensation_id:
-            # try to find a matching compensation
-            comps = utils.get_compensations(
-                self.host,
-                token,
-                site_panel_pk=self.site_panel_id,
-                acquisition_date=self.acquisition_date,
-                method=self.process_request.method
-            )
-            if len(comps['data']) > 0:
-                # found a match, set the comp for this sample
-                self.compensation_id = comps['data'][0]['id']
-
-        # if there's still no compensation id, try the FCS file's spill
-        if not self.compensation_id:
-            self.compensation = self._parse_fcs_spill(token)
-        else:
-            # we have a compensation_id, download it and save
-            if self._download_compensation(token):
-                try:
-                    self.compensation = numpy.load(
-                        BASE_DIR + '%s/comp/comp_%s.npy'
-                        % (
-                            self.host,
-                            self.compensation_id
-                        )
-                    )
-                except Exception, e:
-                    print e
-                    return False
-            else:
-                return False
-
-        if len(self.compensation) > 0:
-            return True
-
-        # No compensation was found
-        return False
-
     def compensate_subsample(self, token, directory):
         """
         Gets compensation matrix and applies it to the subsample, saving
@@ -542,8 +408,6 @@ class Sample(object):
 
         if not os.path.exists(directory):
             os.makedirs(directory)
-
-        self._populate_compensation(token)
 
         if not len(self.compensation) > 0:
             return False
