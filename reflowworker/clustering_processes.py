@@ -12,11 +12,6 @@ def hdp(process_request):
     iteration_count = int(process_request.clustering_options['iteration_count'])
     cluster_count = int(process_request.clustering_options['cluster_count'])
 
-    # initialize our list of Cluster instances
-    clusters = list()
-    for i in range(cluster_count):
-        clusters.append(Cluster(i))
-
     burn_in = int(process_request.clustering_options['burnin'])
     random_seed = int(process_request.clustering_options['random_seed'])
 
@@ -139,20 +134,40 @@ def hdp(process_request):
         # for one sample
         results_avg = [results]
 
+    # now run make_modal to merge insignificant modes and create a common
+    # "parent" mode for each cluster across all samples...else a common cluster
+    # between 2 samples may get a different cluster index
+    # Note, the cluster to mode mapping is in the "cmap" property
+    modal_mixture = results_avg.make_modal()
+
+    # initialize our list of Cluster instances
+    clusters = list()
+    for i in range(len(modal_mixture.cmap)):
+        clusters.append(Cluster(i))
+
     # update our list of clusters
     # first iterate over our data sets to get the classified events
     for i, sample in enumerate(process_request.samples):
         classifications = results_avg[i].classify(data_sets[i])
 
-        # group event indices by cluster for this sample
+        # group event indices by the modal mixture mode for this sample
         event_map = dict()
         for j, event_class in enumerate(classifications):
-            if event_class in event_map:
-                # append this event index to this sample cluster
-                event_map[event_class].append(sample.event_indices[j])
+            modal_event_class = None
+            for m_class in modal_mixture.cmap:
+                if event_class in modal_mixture.cmap[m_class]:
+                    modal_event_class = m_class
+                    break
+
+            if not modal_event_class:
+                continue
+
+            if modal_event_class in event_map:
+                # append this mode index to this sample cluster
+                event_map[modal_event_class].append(sample.event_indices[j])
             else:
                 # create a new map for this sample cluster
-                event_map[event_class] = [sample.event_indices[j]]
+                event_map[modal_event_class] = [sample.event_indices[j]]
 
         # now we have all the events for this sample classified and organized
         # by cluster, so we can start creating the SampleCluster instances
@@ -163,7 +178,7 @@ def hdp(process_request):
                 parameters.append(
                     SampleClusterParameter(
                         channel_number=channel + 1,  # channel is an index
-                        location=results_avg.mus[event_class][k]
+                        location=modal_mixture.modes[event_class][k]
                     )
                 )
 
