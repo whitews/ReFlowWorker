@@ -212,6 +212,7 @@ class Worker(Daemon):
                 logging.warning(
                     "Invalid input values for process request")
                 self.report_errors()
+                self.assigned_pr = None
                 return
 
             # Download the samples
