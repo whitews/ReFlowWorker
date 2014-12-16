@@ -159,7 +159,7 @@ def hdp(process_request):
                     modal_event_class = m_class
                     break
 
-            if not modal_event_class:
+            if modal_event_class is None:
                 continue
 
             if modal_event_class in event_map:
