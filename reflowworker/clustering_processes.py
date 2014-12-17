@@ -148,26 +148,17 @@ def hdp(process_request):
     # update our list of clusters
     # first iterate over our data sets to get the classified events
     for i, sample in enumerate(process_request.samples):
-        classifications = results_avg[i].classify(data_sets[i])
+        classifications = modal_mixture[i].classify(data_sets[i])
 
         # group event indices by the modal mixture mode for this sample
         event_map = dict()
         for j, event_class in enumerate(classifications):
-            modal_event_class = None
-            for m_class in modal_mixture.cmap:
-                if event_class in modal_mixture.cmap[m_class]:
-                    modal_event_class = m_class
-                    break
-
-            if modal_event_class is None:
-                continue
-
-            if modal_event_class in event_map:
+            if event_class in event_map:
                 # append this mode index to this sample cluster
-                event_map[modal_event_class].append(sample.event_indices[j])
+                event_map[event_class].append(sample.event_indices[j])
             else:
                 # create a new map for this sample cluster
-                event_map[modal_event_class] = [sample.event_indices[j]]
+                event_map[event_class] = [sample.event_indices[j]]
 
         # now we have all the events for this sample classified and organized
         # by cluster, so we can start creating the SampleCluster instances
