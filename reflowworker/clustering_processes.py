@@ -134,16 +134,25 @@ def hdp(process_request):
         # for one sample
         results_avg = [results]
 
-    # now run make_modal to merge insignificant modes and create a common
-    # "parent" mode for each cluster across all samples...else a common cluster
-    # between 2 samples may get a different cluster index
-    # Note, the cluster to mode mapping is in the "cmap" property
-    modal_mixture = results_avg.make_modal()
-
     # initialize our list of Cluster instances
     clusters = list()
-    for i in range(len(modal_mixture.cmap)):
-        clusters.append(Cluster(i))
+
+    if n_data_sets > 1:
+        # for multiple data sets run make_modal to merge insignificant modes
+        # and create a common "parent" mode for each cluster across all
+        # samples...else a common cluster between 2 samples may get a different
+        # cluster index
+        # Note, the cluster to mode mapping is in the "cmap" property
+        modal_mixture = results_avg.make_modal()
+
+        for i in range(len(modal_mixture.cmap)):
+            clusters.append(Cluster(i))
+    else:
+        # for single sample there's no merging required
+        modal_mixture = results_avg
+
+        for i in range(cluster_count):
+            clusters.append(Cluster(i))
 
     # update our list of clusters
     # first iterate over our data sets to get the classified events
