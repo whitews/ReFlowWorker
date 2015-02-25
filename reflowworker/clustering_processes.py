@@ -42,18 +42,33 @@ def hdp(process_request):
     # the daemonize procedure
     from flowstats import cluster
 
-    model = cluster.HDPMixtureModel(
-        cluster_count,
-        iteration_count,
-        burn_in)
-
-    results = model.fit(
-        data_sets,
-        True,
-        seed=random_seed,
-        munkres_id=True,
-        verbose=True
-    )
+    if n_data_sets > 1:
+        model = cluster.HDPMixtureModel(
+            cluster_count,
+            iteration_count,
+            burn_in
+        )
+        results = model.fit(
+            data_sets,
+            True,
+            seed=random_seed,
+            munkres_id=True,
+            verbose=True
+        )
+    else:
+        model = cluster.DPMixtureModel(
+            cluster_count,
+            iteration_count,
+            burn_in,
+            model='dp'
+        )
+        results = model.fit(
+            data_sets[0],
+            True,
+            seed=random_seed,
+            munkres_id=True,
+            verbose=True
+        )
 
     metadata = dict()
 
@@ -104,60 +119,51 @@ def hdp(process_request):
     output_file.close()
 
     # Get averaged results
-    if n_data_sets > 1:
-        results_avg = results.average()
+    results_avg = results.average()
 
-        average_dict = dict()
-        average_dict['metadata'] = metadata
-        average_dict['results'] = dict()
+    average_dict = dict()
+    average_dict['metadata'] = metadata
+    average_dict['results'] = dict()
 
-        # averaged pis are split by data set
-        pis = np.array_split(results_avg.pis, n_data_sets)
+    # averaged pis are split by data set
+    pis = np.array_split(results_avg.pis, n_data_sets)
 
-        average_dict['results']['samples'] = list()
-        for i, pi in enumerate(pis):
-            average_dict['results']['samples'].append(dict())
-            average_dict['results']['samples'][i]['sample_id'] = \
-                sample_id_map[i]
-            average_dict['results']['samples'][i]['pis'] = pi.tolist()
+    average_dict['results']['samples'] = list()
+    for i, pi in enumerate(pis):
+        average_dict['results']['samples'].append(dict())
+        average_dict['results']['samples'][i]['sample_id'] = \
+            sample_id_map[i]
+        average_dict['results']['samples'][i]['pis'] = pi.tolist()
 
-        average_dict['results']['mus'] = results_avg.mus.tolist()
-        average_dict['results']['sigmas'] = results_avg.sigmas.tolist()
+    average_dict['results']['mus'] = results_avg.mus.tolist()
+    average_dict['results']['sigmas'] = results_avg.sigmas.tolist()
 
-        # Save JSON averaged results
-        file_path = process_request.results_directory + "/averaged_results.json"
-        output_file = open(file_path, 'wb')
-        json.dump(average_dict, output_file, indent=2)
-        output_file.close()
-    else:
-        # this shouldn't really happen, it would mean that HDP was requested
-        # for one sample
-        results_avg = [results]
+    # Save JSON averaged results
+    file_path = process_request.results_directory + "/averaged_results.json"
+    output_file = open(file_path, 'wb')
+    json.dump(average_dict, output_file, indent=2)
+    output_file.close()
 
     # initialize our list of Cluster instances
     clusters = list()
 
-    if n_data_sets > 1:
-        # for multiple data sets run make_modal to merge insignificant modes
-        # and create a common "parent" mode for each cluster across all
-        # samples...else a common cluster between 2 samples may get a different
-        # cluster index
-        # Note, the cluster to mode mapping is in the "cmap" property
-        modal_mixture = results_avg.make_modal()
+    # for multiple data sets run make_modal to merge insignificant modes
+    # and create a common "parent" mode for each cluster across all
+    # samples...else a common cluster between 2 samples may get a different
+    # cluster index
+    # Note, the cluster to mode mapping is in the "cmap" property
+    modal_mixture = results_avg.make_modal()
 
-        for i in range(len(modal_mixture.cmap)):
-            clusters.append(Cluster(i))
-    else:
-        # for single sample there's no merging required
-        modal_mixture = results_avg
-
-        for i in range(cluster_count):
-            clusters.append(Cluster(i))
+    for i in range(len(modal_mixture.cmap)):
+        clusters.append(Cluster(i))
 
     # update our list of clusters
     # first iterate over our data sets to get the classified events
     for i, sample in enumerate(process_request.samples):
-        classifications = modal_mixture[i].classify(data_sets[i])
+        if n_data_sets > 1:
+            classifications = modal_mixture[i].classify(data_sets[i])
+        else:
+            classifications = modal_mixture.classify(data_sets[i])
 
         # group event indices by the modal mixture mode for this sample
         event_map = dict()
