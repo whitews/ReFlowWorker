@@ -3,9 +3,9 @@ Setting Up a Worker on an Ubuntu 14.04 LTS system
 
 #.  Start with a fresh install of 14.04 LTS Server (64-bit).
 
-#.  Install numpy (1.8.2), scipy (0.13.3), cython (0.20.1), mpi4py, and pymc using apt-get:
+#.  Install setuptools, numpy (1.8.2), scipy (0.13.3), cython (0.20.1), mpi4py, and pymc using apt-get:
 
-    ``apt-get install python-numpy python-scipy cython python-mpi4py python-pymc``
+    ``apt-get install python-setuptools python-numpy python-scipy cython python-mpi4py python-pymc``
 
 #.  Install version 331 of the NVIDIA driver & the associated dev files:
 
