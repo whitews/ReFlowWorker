@@ -5,7 +5,7 @@ Setting Up a Worker on an Ubuntu 14.04 LTS system
 
 #.  Install numpy (1.8.2), scipy (0.13.3), cython (0.20.1), mpi4py, and pymc using apt-get:
 
-    ``apt-get install python-mpi4py python-numpy python-scipy cython python-pymc``
+    ``apt-get install python-numpy python-scipy cython python-mpi4py python-pymc``
 
 #.  Install version 331 of the NVIDIA driver & the associated dev files:
 
@@ -25,7 +25,7 @@ Setting Up a Worker on an Ubuntu 14.04 LTS system
 
 #.  Install pycuda:
 
-    ``apt-get install ???``
+    ``apt-get install python-pycuda``
 
 #.  Install the development files for libarmadillo & libboost (1.54):
 
@@ -39,8 +39,6 @@ Setting Up a Worker on an Ubuntu 14.04 LTS system
 
     ::
 
-        mkdir git
-        cd git
         git clone https://github.com/andrewcron/cy_armadillo.git
         git clone https://github.com/andrewcron/cyrand.git
         git clone https://github.com/dukestats/gpustats.git
@@ -50,18 +48,18 @@ Setting Up a Worker on an Ubuntu 14.04 LTS system
         git clone https://github.com/whitews/FlowStats.git
         git clone https://github.com/whitews/ReFlowRESTClient.git
 
-#.  Next, install cyrand and cy_armadillo (cyarm) using setup.py:
+#.  Install the cloned libraries using ``python setup.py install`` in the following order:
 
-    ``python setup.py install``
+    * cyrand
+    * cyarma (cy_armadillo)
+    * gpustats
+    * dpmix
+    * FlowIO
+    * FlowUtils
+    * FlowStats
+    * ReFlowRESTClient
 
-#. Install the rest of the libraries using setup.py in the following order
-
-   * gpustats
-   * dpmix
-   * FlowIO
-   * FlowUtils
-   * FlowStats
-   * ReFlowRESTClient
+#.  Clone the ReFlowWorker git repository, but don't install it as a library.
 
 #.  Create a new worker on the ReFlow server and get the new worker's token from the Django admin site.
 
