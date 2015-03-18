@@ -34,6 +34,7 @@ Setting Up a Worker on an Ubuntu 14.04 LTS system
 #.  Clone the following repositories:
 
     ::
+
         mkdir git
         cd git
         git clone --recursive http://git.tiker.net/trees/pycuda.git
@@ -53,6 +54,7 @@ Setting Up a Worker on an Ubuntu 14.04 LTS system
 #.  Install pycuda first:
 
     ::
+
         cd pycuda
         python configure.py
         python setup.py install
