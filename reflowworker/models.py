@@ -21,6 +21,7 @@ class ProcessRequest(object):
         self.token = token
         self.method = method  # 'http://' or 'https://'
         self.process_request_id = pr_dict['id']
+        self.parent_stage = pr_dict['parent_stage']
         self.sample_collection_id = pr_dict['sample_collection']
         self.subsample_count = pr_dict['subsample_count']
         self.directory = "%s%s/process_requests/%s" % (
