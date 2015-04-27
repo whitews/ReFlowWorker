@@ -58,7 +58,7 @@ class ProcessRequest(object):
             sample_collection_pk=self.sample_collection_id,
             method=self.method
         )
-        if not 'data' in response:
+        if 'data' not in response:
             return
 
         for member in response['data']['members']:
@@ -66,14 +66,14 @@ class ProcessRequest(object):
             sample = Sample(self, member['sample'], compensation)
 
             self.samples.append(sample)
-            if not sample.site_panel_id in self.panels:
+            if sample.site_panel_id not in self.panels:
                 panel_response = utils.get_site_panel(
                     self.host,
                     self.token,
                     sample.site_panel_id,
                     method=self.method
                 )
-                if not 'data' in response:
+                if 'data' not in response:
                     continue
                 self.panels[sample.site_panel_id] = panel_response['data']
 
@@ -622,7 +622,7 @@ class Cluster(object):
             method=method
         )
 
-        if not 'status' in response:
+        if 'status' not in response:
             return False
         if response['status'] == 201:
             self.reflow_pk = response['data']['id']
@@ -658,7 +658,7 @@ class SampleCluster(object):
             method=method
         )
 
-        if not 'status' in response:
+        if 'status' not in response:
             return False
         if response['status'] == 201:
             return True
