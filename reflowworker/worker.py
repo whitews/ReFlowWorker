@@ -157,7 +157,7 @@ class Worker(Daemon):
                 logging.warning("Exception: ", e.message)
                 return
 
-            if not 'data' in viable_requests:
+            if 'data' not in viable_requests:
                 logging.warning(
                     "Malformed response from ReFlow server attempting " +
                     "to get viable process requests.")
@@ -183,7 +183,7 @@ class Worker(Daemon):
                 except Exception as e:
                     logging.warning("Exception: ", e.message)
 
-                if not 'status' in assignment_response:
+                if 'status' not in assignment_response:
                     continue
                 if not assignment_response['status'] == 201:
                     continue
@@ -278,9 +278,9 @@ class Worker(Daemon):
                     self.assigned_pr.process_request_id,
                     method=self.method
                 )
-                if not 'data' in r:
+                if 'data' not in r:
                     raise Exception("Improper host response, no 'data' key")
-                if not 'status' in r['data']:
+                if 'status' not in r['data']:
                     raise Exception("Improper host response, no 'status' key")
                 if r['data']['status'] != 'Complete':
                     raise Exception("Failed to mark assignment complete")
