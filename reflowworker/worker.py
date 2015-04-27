@@ -304,7 +304,10 @@ class Worker(Daemon):
         Calls to all the processing sub-tasks are made here.
         """
 
-        # first we compensate
+        # first, generate sub-sampled data sets
+        self.assigned_pr.generate_subsamples()
+
+        # then we compensate
         self.assigned_pr.compensate_samples()
 
         # next is transformation

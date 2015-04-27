@@ -3,6 +3,7 @@ import re
 
 from reflowrestclient import utils
 import numpy
+import flowio
 import flowutils
 
 BASE_DIR = '/var/tmp/ReFlow-data/'
@@ -29,7 +30,6 @@ class ProcessRequest(object):
             self.host,
             self.process_request_id)
         self.inputs = pr_dict['inputs']
-        self.use_fcs = False
         self.samples = list()
         self.panels = dict()
         self.transformation = None
@@ -136,22 +136,23 @@ class ProcessRequest(object):
         return True
 
     def download_samples(self):
-        if self.use_fcs:
-            for s in self.samples:
-                s.download_fcs(self.token)
-        else:
-            for s in self.samples:
-                s.download_subsample(self.token)
+        for s in self.samples:
+            s.download_fcs(self.token)
+
+    def generate_subsamples(self):
+        directory = self.directory + '/preprocessed/subsampled'
+        for s in self.samples:
+            shuffled_indices = numpy.arange(s.event_count)
+            numpy.random.shuffle(shuffled_indices)
+            s.generate_subsample(
+                directory,
+                shuffled_indices[:self.subsample_count]
+            )
 
     def compensate_samples(self):
         directory = self.directory + '/preprocessed/comp'
-        if self.use_fcs:
-            for s in self.samples:
-                # TODO: implement compensate_fcs
-                s.compensate_fcs(self.token, directory)
-        else:
-            for s in self.samples:
-                s.compensate_subsample(directory)
+        for s in self.samples:
+            s.compensate_subsample(directory)
 
     def apply_logicle_transform(self):
         directory = self.directory + '/preprocessed/transformed'
@@ -282,6 +283,8 @@ class Sample(object):
         self.compensation = compensation
 
         self.fcs_path = None  # path to downloaded FCS file
+        self.event_count = None  # total event count
+        self.event_indices = None  # indices used for sub-sampling
         self.subsample_path = None  # path to subsampled Numpy array
         self.compensated_path = None  # path to comp'd data (numpy)
         self.transformed_path = None  # path to transformed data (numpy)
@@ -289,7 +292,6 @@ class Sample(object):
 
         # need to save sub-sampled indices for the clustering output
         # if sample is using full FCS data, the indices aren't needed
-        self.is_subsampled = False  # TODO: no longer needed, everything is subsampled even if it's all the events
         self.subsample_indices = None
 
         self.acquisition_date = sample_dict['acquisition_date']
@@ -320,54 +322,13 @@ class Sample(object):
 
         self.site_panel_id = sample_dict['site_panel']
 
-    def download_subsample(self, token):
-        """
-        ReFlow Worker sample downloads are kept in BASE_DIR
-        organized by host, then sample id
-
-        Returns True if download succeeded or file is already present
-        Also updates self.subsample_path
-        """
-        if not self.host or not self.sample_id:
-            return False
-
-        download_dir = BASE_DIR + str(self.host) + '/'
-        if not os.path.exists(download_dir):
-            os.makedirs(download_dir)
-        subsample_path = download_dir + str(self.sample_id) + '.npy'
-
-        if not os.path.exists(subsample_path):
-            try:
-                utils.download_sample(
-                    self.host,
-                    token,
-                    sample_pk=self.sample_id,
-                    data_format='npy',
-                    directory=download_dir,
-                    method=self.process_request.method
-                )
-            except Exception, e:
-                print e
-                return False
-
-        self.subsample_path = subsample_path
-        self.is_subsampled = True
-
-        # get the sub-sampled indices
-        data = numpy.load(self.subsample_path)
-
-        # note the 1st data column are event indices
-        self.event_indices = data[:, 0]
-
-        return True
-
     def download_fcs(self, token):
         """
         ReFlow Worker sample downloads are kept in BASE_DIR
         organized by host, then sample id
 
         Returns True if download succeeded or file is already present
-        Also updates self.subsample_path
+        Also updates self.fcs_path
         """
         if not self.host or not self.sample_id:
             return False
@@ -376,6 +337,8 @@ class Sample(object):
         if not os.path.exists(download_dir):
             os.makedirs(download_dir)
         fcs_path = download_dir + str(self.sample_id) + '.fcs'
+
+        # TODO: if FCS file exists validate its identity using sha1 hash
 
         if not os.path.exists(fcs_path):
             try:
@@ -392,6 +355,56 @@ class Sample(object):
                 return False
 
         self.fcs_path = fcs_path
+
+        # open fcs file to save event count
+        flow_obj = flowio.FlowData(self.fcs_path)
+        self.event_count = flow_obj.event_count
+
+        return True
+
+    def generate_subsample(self, directory, indices):
+        """
+        Sub-samples FCS sample using random seed
+
+        Returns True if subsample succeeded
+        Also updates self.subsample_path & self.event_indices
+        """
+        if not self.sample_id:
+            return False
+
+        if not (self.fcs_path and os.path.exists(self.fcs_path)):
+            return False
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        # open fcs file
+        flow_obj = flowio.FlowData(self.fcs_path)
+
+        # sub-sample FCS events using given indices
+        # create new 1st column containing the event indices of the
+        # sub-sampled events
+        numpy_data = numpy.reshape(
+            flow_obj.events,
+            (-1, flow_obj.channel_count)
+        )
+        indexed_subsample = numpy.insert(
+            numpy_data[indices],
+            0,
+            indices,
+            axis=1
+        )
+
+        # Save sub-sampled events as NumPy array in given directory
+        subsample_path = "%s/sub_%s.npy" % (
+            directory,
+            str(self.sample_id)
+        )
+        numpy.save(subsample_path, indexed_subsample)
+
+        self.subsample_path = subsample_path
+        self.event_indices = indices
+
         return True
 
     def compensate_subsample(self, directory):
@@ -402,7 +415,7 @@ class Sample(object):
         Returns False if the subsample has not been downloaded or
         if the compensation fails or if the directory given doesn't exist
         """
-        if not self.host or not self.sample_id:
+        if not self.sample_id:
             return False
 
         if not (self.subsample_path and os.path.exists(self.subsample_path)):
@@ -463,7 +476,7 @@ class Sample(object):
         Returns False if the transformation fails or if the directory given
         cannot be created
         """
-        if not self.host or not self.sample_id:
+        if not self.sample_id:
             return False
 
         if use_comp:
@@ -527,7 +540,7 @@ class Sample(object):
         cannot be created
         """
 
-        if not self.host or not self.sample_id:
+        if not self.sample_id:
             return False
 
         if use_comp:
