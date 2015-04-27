@@ -22,6 +22,7 @@ class ProcessRequest(object):
         self.method = method  # 'http://' or 'https://'
         self.process_request_id = pr_dict['id']
         self.sample_collection_id = pr_dict['sample_collection']
+        self.subsample_count = pr_dict['subsample_count']
         self.directory = "%s%s/process_requests/%s" % (
             BASE_DIR,
             self.host,
@@ -149,7 +150,7 @@ class ProcessRequest(object):
                 s.compensate_fcs(self.token, directory)
         else:
             for s in self.samples:
-                s.compensate_subsample(self.token, directory)
+                s.compensate_subsample(directory)
 
     def apply_logicle_transform(self):
         directory = self.directory + '/preprocessed/transformed'
@@ -280,14 +281,14 @@ class Sample(object):
         self.compensation = compensation
 
         self.fcs_path = None  # path to downloaded FCS file
-        self.subsample_path = None  # path to downloaded Numpy array
+        self.subsample_path = None  # path to subsampled Numpy array
         self.compensated_path = None  # path to comp'd data (numpy)
         self.transformed_path = None  # path to transformed data (numpy)
         self.normalized_path = None  # path to normalized data (numpy)
 
         # need to save sub-sampled indices for the clustering output
         # if sample is using full FCS data, the indices aren't needed
-        self.is_subsampled = False
+        self.is_subsampled = False  # TODO: no longer needed, everything is subsampled even if it's all the events
         self.subsample_indices = None
 
         self.acquisition_date = sample_dict['acquisition_date']
@@ -392,7 +393,7 @@ class Sample(object):
         self.fcs_path = fcs_path
         return True
 
-    def compensate_subsample(self, token, directory):
+    def compensate_subsample(self, directory):
         """
         Gets compensation matrix and applies it to the subsample, saving
         compensated data in given directory
