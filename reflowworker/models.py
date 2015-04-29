@@ -652,10 +652,11 @@ class SampleCluster(object):
     Each sample can have an independent location for the parent cluster.
     These locations are stored in SampleClusterParameter instances.
     """
-    def __init__(self, sample_id, parameters, event_indices):
+    def __init__(self, sample_id, parameters, event_indices, components):
         self.sample_id = sample_id
         self.parameters = parameters
         self.event_indices = [int(x) for x in event_indices]
+        self.components = components
 
     def post(self, host, token, method, cluster_id):
         param_dict = dict()
@@ -684,6 +685,52 @@ class SampleCluster(object):
 class SampleClusterParameter(object):
     """
     Holds the cluster location for a particular Sample channel
+    """
+    def __init__(self, channel_number, location):
+        self.channel = channel_number
+        self.location = location
+
+
+class SampleClusterComponent(object):
+    """
+    Since a SampleCluster can be considered a mode comprised of one or more
+    components. Each component is a gaussian distribution with its own
+    location, weight, and covariance. The components are mainly used
+    for re-classification of events in 2nd stage processing
+    """
+    def __init__(self, index, weight, covariance, parameters):
+        self.index = index
+        self.weight = weight
+        self.covariance = covariance
+        self.parameters = parameters
+
+    def post(self, host, token, method, sample_cluster_id):
+        param_dict = dict()
+
+        for p in self.parameters:
+            param_dict[p.channel] = p.location
+
+        response = utils.post_sample_cluster_component(
+            host,
+            token,
+            sample_cluster_id,
+            self.weight,
+            self.covariance,
+            param_dict,
+            method=method
+        )
+
+        if 'status' not in response:
+            return False
+        if response['status'] == 201:
+            return True
+
+        return False
+
+
+class SampleClusterComponentParameter(object):
+    """
+    Holds the component location for a particular Sample channel
     """
     def __init__(self, channel_number, location):
         self.channel = channel_number
