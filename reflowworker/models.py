@@ -1,5 +1,6 @@
 import os
 import re
+from cStringIO import StringIO
 
 from reflowrestclient import utils
 import numpy
@@ -664,6 +665,29 @@ class SampleCluster(object):
         for p in self.parameters:
             param_dict[p.channel] = p.location
 
+        component_list = list()
+
+        for comp in self.components:
+            comp_dict = dict()
+
+            # convert covariance to string
+            covariance = StringIO()
+            numpy.savetxt(covariance, comp.covariance, fmt="%d", delimiter=',')
+
+            # convert component parameter locations from class instance to dict
+            comp_param_dict = dict()
+            for cp in comp.parameters:
+                comp_param_dict[cp.channel] = cp.location
+
+            # assemble component dictionary
+            comp_dict['index'] = comp.index
+            comp_dict['weight'] = comp.weight
+            comp_dict['covariance'] = covariance.getvalue()
+            comp_dict['parameters'] = comp_param_dict
+
+            # add component to list
+            component_list.append(comp_dict)
+
         response = utils.post_sample_cluster(
             host,
             token,
@@ -671,6 +695,7 @@ class SampleCluster(object):
             self.sample_id,
             param_dict,
             self.event_indices,
+            component_list,
             method=method
         )
 

@@ -227,69 +227,69 @@ class Worker(Daemon):
                 self.report_errors()
                 return
 
-            # if not clusters:
-            #     self.report_errors()
-            # else:
-            #     self.assigned_pr.set_clusters(clusters)
-            #
-            # # Verify assignment once again
-            # try:
-            #     verify_assignment_response = utils.verify_pr_assignment(
-            #         self.host,
-            #         self.token,
-            #         self.assigned_pr.process_request_id,
-            #         method=self.method
-            #     )
-            #     if not verify_assignment_response['data']['assignment']:
-            #         # we're not assigned anymore, delete our PR and return
-            #         self.assigned_pr = None
-            #         raise Exception("Server revoked our assignment")
-            # except Exception as e:
-            #     logging.exception(e.message)
-            #     return
-            #
-            # # Upload results
-            # try:
-            #     self.upload_results()
-            # except Exception as e:
-            #     logging.exception(e.message)
-            #     return
-            #
-            # # Report the ProcessRequest is complete
-            # try:
-            #     verify_complete_response = utils.complete_pr_assignment(
-            #         self.host,
-            #         self.token,
-            #         self.assigned_pr.process_request_id,
-            #         method=self.method
-            #     )
-            #     if verify_complete_response['status'] != 200:
-            #         # something went wrong
-            #         raise Exception("Server rejected our 'Complete' request")
-            # except Exception as e:
-            #     logging.exception(e.message)
-            #     return
-            #
-            # # Verify 'Complete' status
-            # try:
-            #     r = utils.get_process_request(
-            #         self.host,
-            #         self.token,
-            #         self.assigned_pr.process_request_id,
-            #         method=self.method
-            #     )
-            #     if 'data' not in r:
-            #         raise Exception("Improper host response, no 'data' key")
-            #     if 'status' not in r['data']:
-            #         raise Exception("Improper host response, no 'status' key")
-            #     if r['data']['status'] != 'Complete':
-            #         raise Exception("Failed to mark assignment complete")
-            # except Exception as e:
-            #     # TODO: should probably do more than just log an error
-            #     # locally, perhaps try to send errors again? then re-try to
-            #     # send complete status again?
-            #     logging.exception(e.message)
-            #     return
+            if not clusters:
+                self.report_errors()
+            else:
+                self.assigned_pr.set_clusters(clusters)
+
+            # Verify assignment once again
+            try:
+                verify_assignment_response = utils.verify_pr_assignment(
+                    self.host,
+                    self.token,
+                    self.assigned_pr.process_request_id,
+                    method=self.method
+                )
+                if not verify_assignment_response['data']['assignment']:
+                    # we're not assigned anymore, delete our PR and return
+                    self.assigned_pr = None
+                    raise Exception("Server revoked our assignment")
+            except Exception as e:
+                logging.exception(e.message)
+                return
+
+            # Upload results
+            try:
+                self.upload_results()
+            except Exception as e:
+                logging.exception(e.message)
+                return
+
+            # Report the ProcessRequest is complete
+            try:
+                verify_complete_response = utils.complete_pr_assignment(
+                    self.host,
+                    self.token,
+                    self.assigned_pr.process_request_id,
+                    method=self.method
+                )
+                if verify_complete_response['status'] != 200:
+                    # something went wrong
+                    raise Exception("Server rejected our 'Complete' request")
+            except Exception as e:
+                logging.exception(e.message)
+                return
+
+            # Verify 'Complete' status
+            try:
+                r = utils.get_process_request(
+                    self.host,
+                    self.token,
+                    self.assigned_pr.process_request_id,
+                    method=self.method
+                )
+                if 'data' not in r:
+                    raise Exception("Improper host response, no 'data' key")
+                if 'status' not in r['data']:
+                    raise Exception("Improper host response, no 'status' key")
+                if r['data']['status'] != 'Complete':
+                    raise Exception("Failed to mark assignment complete")
+            except Exception as e:
+                # TODO: should probably do more than just log an error
+                # locally, perhaps try to send errors again? then re-try to
+                # send complete status again?
+                logging.exception(e.message)
+                return
 
             # TODO: Clean up! Delete the local files
 
@@ -344,27 +344,9 @@ class Worker(Daemon):
         if self.assigned_pr is None:
             return
 
+        # TODO: wrap in try to report errors on failure
         self.assigned_pr.post_clusters()
 
-        # get list of files in the results dir for this PR id
-        # all files in results will be uploaded to ReFlow as
-        # ProcessOutputValue model instances, and these have 3 values:
-        #     PR_id: the id of the ProcessRequest
-        #     key: the name of a results file
-        #     value: the file itself (usually JSON)
-        results_files = list()
-        results_dir = self.assigned_pr.results_directory
-        for f in os.listdir(results_dir):
-            if os.path.isfile(os.path.join(results_dir, f)):
-                results_files.append(f)
-        for f in results_files:
-            response = utils.post_process_request_output(
-                self.host,
-                self.token,
-                self.assigned_pr.process_request_id,
-                os.path.join(results_dir, f),
-                method=self.method
-            )
         return
 
 if __name__ == "__main__":
