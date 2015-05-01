@@ -24,6 +24,7 @@ class ProcessRequest(object):
         self.method = method  # 'http://' or 'https://'
         self.process_request_id = pr_dict['id']
         self.parent_stage = pr_dict['parent_stage']
+        self.random_seed = None
         self.sample_collection_id = pr_dict['sample_collection']
         self.subsample_count = pr_dict['subsample_count']
         self.directory = "%s%s/process_requests/%s" % (
@@ -129,6 +130,11 @@ class ProcessRequest(object):
 
         if not self.clustering:
             # clustering category is required, but missing
+            return False
+
+        try:
+            self.random_seed = int(self.clustering_options['random_seed'])
+        except:
             return False
 
         if not self.transformation:

@@ -3,6 +3,7 @@ import logging
 import sys
 import time
 import os
+import numpy as np
 
 from reflowrestclient import utils
 
@@ -215,6 +216,9 @@ class Worker(Daemon):
                 self.assigned_pr = None
                 return
 
+            # Seed the RNG
+            np.random.seed(self.assigned_pr.random_seed)
+
             # Download the samples
             assert isinstance(self.assigned_pr, ProcessRequest)
             self.assigned_pr.download_samples()
@@ -303,7 +307,6 @@ class Worker(Daemon):
         Called after validate_inputs
         Calls to all the processing sub-tasks are made here.
         """
-
         # first, generate sub-sampled data sets
         self.assigned_pr.generate_subsamples()
 
