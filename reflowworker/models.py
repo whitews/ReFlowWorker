@@ -659,10 +659,10 @@ class SampleCluster(object):
     Each sample can have an independent location for the parent cluster.
     These locations are stored in SampleClusterParameter instances.
     """
-    def __init__(self, sample_id, parameters, event_indices, components):
+    def __init__(self, sample_id, parameters, events, components):
         self.sample_id = sample_id
         self.parameters = parameters
-        self.event_indices = [int(x) for x in event_indices]
+        self.events = events
         self.components = components
 
     def post(self, host, token, method, cluster_id):
@@ -700,7 +700,7 @@ class SampleCluster(object):
             cluster_id,
             self.sample_id,
             param_dict,
-            self.event_indices,
+            self.events,
             component_list,
             method=method
         )
