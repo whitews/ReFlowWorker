@@ -16,11 +16,9 @@ def hdp(process_request):
     random_seed = int(process_request.clustering_options['random_seed'])
 
     data_sets = list()
-    sample_id_map = list()
     for s in process_request.samples:
         norm_data = np.load(s.normalized_path)
         data_sets.append(norm_data)
-        sample_id_map.append(s.sample_id)
 
     n_data_sets = len(data_sets)
     if not n_data_sets:
