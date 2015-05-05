@@ -536,12 +536,12 @@ class Sample(object):
 
         return True
 
-    def apply_asinh_transform(self, directory, pre_scale=0.01, use_comp=True):
+    def apply_asinh_transform(self, directory, pre_scale=0.003, use_comp=True):
         """
         Transforms sample data
 
         By default, the compensated data will be transformed and the default
-        pre-scale factor is 1/100
+        pre-scale factor is 0.003
 
         Returns False if the transformation fails or if the directory given
         cannot be created
