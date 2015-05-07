@@ -79,6 +79,11 @@ def hdp(process_request):
         else:
             classifications = modal_mixture.classify(data_sets[i])
 
+        # Grab events from transformed data set b/c the normalized data
+        # doesn't have all columns.
+        # transformed data already has the original index in 1st column
+        x_data = np.load(sample.transformed_path)
+
         # Group event indices by the modal mixture mode for this sample.
         # event_map holds the event data plus the event's index (as 1st column)
         # for each mode. the first row for each map contains the header row
@@ -88,12 +93,12 @@ def hdp(process_request):
                 # create a new map for this sample cluster w/ header row
                 header_row = ['event_index']
                 header_row.extend(
-                    process_request.panel_maps[sample.site_panel_id]
+                    range(1, x_data.shape[1] + 1)
                 )
                 event_map[event_class] = [header_row]  # a list of lists
 
-            # grab event, insert it's original index, then add to map
-            event_row = list(data_sets[i][j])
+            # grab event from transformed data, and add to map
+            event_row = list(x_data[j])
             event_row.insert(0, sample.event_indices[j])
             event_map[event_class].append(event_row)
 
