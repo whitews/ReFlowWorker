@@ -28,10 +28,6 @@ class Sample(object):
         self.fcs_path = None  # path to downloaded FCS file
         self.event_count = None  # total event count
         self.subsample_path = None  # path to subsampled Numpy array
-        self.compensated_path = None  # path to comp'd data (numpy)
-        self.compensated_full_path = None  # path to comp'd full data (numpy)
-        self.transformed_path = None  # path to transformed data (numpy)
-        self.normalized_path = None  # path to normalized data (numpy)
 
         # need to save sub-sampled indices for the clustering output
         # if sample is using full FCS data, the indices aren't needed
