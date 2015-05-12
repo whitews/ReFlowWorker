@@ -1,4 +1,4 @@
-from models import Sample
+from sample_models import Sample
 from reflowworker.clustering_processes import hdp
 
 import os
@@ -157,31 +157,6 @@ class ProcessRequest(object):
         for s in self.samples:
             s.download_fcs(self.token, download_dir)
 
-    def _apply_logicle_transform(self, subsample=True):
-        directory = self.directory + '/preprocessed/transformed'
-        for s in self.samples:
-            if subsample:
-                s.apply_logicle_transform(
-                    directory,
-                    int(self.transformation_options['t']),
-                    float(self.transformation_options['w'])
-                )
-            else:
-                s.apply_logicle_transform(
-                    directory,
-                    int(self.transformation_options['t']),
-                    float(self.transformation_options['w'])
-                )
-
-    def _apply_asinh_transform(self, subsample=True):
-        """
-        Inverse hyperbolic sine transformation with a pre-scale factor
-        for optimum visualization (and similarity to the logicle transform)
-        """
-        directory = self.directory + '/preprocessed/transformed'
-        for s in self.samples:
-            s.apply_asinh_transform(directory)
-
     def _normalize_transformed_samples(self):
         directory = self.directory + '/preprocessed/normalized'
 
@@ -240,7 +215,8 @@ class ProcessRequest(object):
                     if 'full_name' in param:
                         if param['full_name'] == p:
                             self.panel_maps[panel].append(
-                                param['fcs_number'] - 1)
+                                param['fcs_number'] - 1
+                            )
 
         for s in self.samples:
             s.create_normalized(directory, self.panel_maps[s.site_panel_id])
@@ -250,21 +226,17 @@ class ProcessRequest(object):
             # we've got a simple 1st stage PR
             # first, generate sub-sampled data sets
             for s in self.samples:
-
+                # Sub-sample events
                 subsample = s.generate_subsample(self.subsample_count)
+
+                # Compensate the sub-sampled events
                 comped_sub = s.compensate_events(subsample)
 
-            # then we compensate
-            self._compensate_samples()
-
-            # next is transformation
-            if self.transformation == 'logicle':
-                self._apply_logicle_transform()
-            elif self.transformation == 'asinh':
-                self._apply_asinh_transform()
-            else:
-                # got some unsupported transform type
-                return False
+                # Apply specified transform to comp'd events
+                if self.transformation == 'logicle':
+                    xform = s.apply_logicle_transform(comped_sub)
+                elif self.transformation == 'asinh':
+                    xform = s.apply_asinh_transform(comped_sub)
 
             # next is normalization of common sample parameters
             self._normalize_transformed_samples()

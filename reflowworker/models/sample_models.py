@@ -152,8 +152,6 @@ class Sample(object):
         # flowutils compensate() takes the plain matrix and indices as
         # separate arguments
         # (also note channel #'s vs indices)
-        data = np.load(self.subsample_path)
-
         indices = self.compensation[0, :] - 1  # headers are channel #'s
         indices = [int(i) for i in indices]
         comp_matrix = self.compensation[1:, :]  # just the matrix
@@ -165,102 +163,14 @@ class Sample(object):
 
         return comp_data
 
-    # TODO: remove this and use above compensate_events
-    def compensate_full_sample(self, directory):
+    def apply_logicle_transform(self, data, logicle_t, logicle_w):
         """
-        Gets compensation matrix and applies it to the full sample, saving
-        compensated data in given directory
+        Applies logicle transform to given data
 
-        Returns False if the FCS sample has not been downloaded or
-        if the compensation fails
+        Returns NumPy array containing transformed data
         """
         if not self.sample_id:
             return False
-
-        if not (self.fcs_path and os.path.exists(self.fcs_path)):
-            return False
-
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        if not len(self.compensation) > 0:
-            return False
-
-        # open fcs file and get event data
-        flow_obj = flowio.FlowData(self.fcs_path)
-        data = np.reshape(
-            flow_obj.events,
-            (-1, flow_obj.channel_count)
-        )
-
-        # self.compensate has headers for the channel numbers, but
-        # FlowUtils compensate() takes the plain matrix and indices as
-        # separate arguments
-        # (also note channel #'s vs indices)
-        indices = self.compensation[0, :] - 1  # headers are channel #'s
-        indices = [int(i) for i in indices]
-        comp_matrix = self.compensation[1:, :]  # just the matrix
-        comp_data = flowutils.compensate.compensate(
-            data,
-            comp_matrix,
-            indices
-        )
-
-        data[:, indices] = comp_data
-
-        # we name these as compd_full_<id>.npy to differentiate between the
-        # comp matrix files which use comp_<id>.npy even though they are
-        # in a different directory...in case anyone ever moves stuff around
-        # things won't clobber each other
-        compensated_path = "%s/compd_full_%s.npy" % (
-            directory,
-            str(self.sample_id)
-        )
-
-        np.save(compensated_path, data)
-
-        self.compensated_full_path = compensated_path
-
-        return True
-
-    def apply_logicle_transform(
-            self,
-            directory,
-            logicle_t,
-            logicle_w,
-            use_comp=True,
-            use_subsample=True):
-        """
-        Transforms sample data
-
-        By default, the compensated data will be transformed and the default
-        transform is 'logicle'
-
-        Returns False if the transformation fails or if the directory given
-        cannot be created
-        """
-        if not self.sample_id:
-            return False
-
-        if use_comp:
-            if not (
-                    self.compensated_path
-                    and
-                    os.path.exists(self.compensated_path)):
-                return False
-            else:
-                data = np.load(self.compensated_path)
-        else:
-            if not (
-                    self.subsample_path
-                    and
-                    os.path.exists(self.subsample_path)):
-                return False
-            else:
-                data = np.load(self.subsample_path)
-
-        if not os.path.exists(directory):
-            os.makedirs(directory)
 
         # don't transform scatter, time, or null channels
         panel = self.process_request.panels[self.site_panel_id]
@@ -282,43 +192,20 @@ class Sample(object):
             w=logicle_w
         )
 
-        transformed_path = "%s/logicle_%s.npy" % (
-            directory,
-            str(self.sample_id)
-        )
-        np.save(transformed_path, x_data)
+        return x_data
 
-        self.transformed_path = transformed_path
-
-        return True
-
-    def apply_asinh_transform(self, directory, pre_scale=0.003, use_comp=True):
+    def apply_asinh_transform(self, data, pre_scale=0.003):
         """
-        Transforms sample data
+        Applies inverse hyperbolic sine transform on given data
 
         By default, the compensated data will be transformed and the default
         pre-scale factor is 0.003
 
-        Returns False if the transformation fails or if the directory given
-        cannot be created
+        Returns NumPy array containing transformed data
         """
 
         if not self.sample_id:
             return False
-
-        if use_comp:
-            if not (self.compensated_path and os.path.exists(self.compensated_path)):
-                return False
-            else:
-                data = np.load(self.compensated_path)
-        else:
-            if not (self.subsample_path and os.path.exists(self.subsample_path)):
-                return False
-            else:
-                data = np.load(self.subsample_path)
-
-        if not os.path.exists(directory):
-            os.makedirs(directory)
 
         # don't transform scatter, time, or null channels
         panel = self.process_request.panels[self.site_panel_id]
@@ -339,37 +226,10 @@ class Sample(object):
             pre_scale=pre_scale
         )
 
-        transformed_path = "%s/asinh_%s.npy" % (
-            directory,
-            str(self.sample_id)
-        )
-        np.save(transformed_path, x_data)
+        return x_data
 
-        self.transformed_path = transformed_path
-
-        return True
-
-    def create_normalized(self, directory, channel_map):
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        if self.transformed_path:
-            data = np.load(self.transformed_path)
-        elif self.compensated_path:
-            data = np.load(self.compensated_path)
-        else:
-            data = np.load(self.subsample_path)
-
-        norm_data = data[:, channel_map]
-
-        normalized_path = "%s/norm_%s.npy" % (
-            directory,
-            str(self.sample_id)
-        )
-
-        np.save(normalized_path, norm_data)
-
-        self.normalized_path = normalized_path
+    def create_normalized(self, data, channel_map):
+        return data[:, channel_map]
 
 
 class Cluster(object):
