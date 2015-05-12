@@ -2,14 +2,12 @@ import json
 import logging
 import sys
 import time
-import os
-import numpy as np
 
 from reflowrestclient import utils
 
 from daemon import Daemon
-from models import ProcessRequest
-from clustering_processes import hdp
+from models.process_request import ProcessRequest
+
 
 WORKER_CONF = '/etc/reflow_worker.conf'
 WORKER_LOG = '/var/log/reflow_worker.log'
@@ -207,34 +205,12 @@ class Worker(Daemon):
                     return
         else:
             # We've got something to do!
-
-            # First, validate the inputs
-            if not self.assigned_pr.validate_inputs():
-                logging.warning(
-                    "Invalid input values for process request")
-                self.report_errors()
-                self.assigned_pr = None
-                return
-
-            # Seed the RNG
-            np.random.seed(self.assigned_pr.random_seed)
-
-            # Download the samples
-            assert isinstance(self.assigned_pr, ProcessRequest)
-            self.assigned_pr.download_samples()
-
-            # Stub method to process the data
             try:
-                clusters = self.process()
+                self.assigned_pr.analyze()
             except Exception, e:
                 logging.exception(e.message)
                 self.report_errors()
                 return
-
-            if not clusters:
-                self.report_errors()
-            else:
-                self.assigned_pr.set_clusters(clusters)
 
             # Verify assignment once again
             try:
@@ -254,7 +230,7 @@ class Worker(Daemon):
 
             # Upload results
             try:
-                self.upload_results()
+                self.assigned_pr.post_clusters()
             except Exception as e:
                 logging.exception(e.message)
                 return
@@ -302,54 +278,10 @@ class Worker(Daemon):
             self.errors = list()
             return
 
-    def process(self):
-        """
-        Called after validate_inputs
-        Calls to all the processing sub-tasks are made here.
-        """
-        # first, generate sub-sampled data sets
-        self.assigned_pr.generate_subsamples()
-
-        # then we compensate
-        self.assigned_pr.compensate_samples()
-
-        # next is transformation
-        if self.assigned_pr.transformation == 'logicle':
-            self.assigned_pr.apply_logicle_transform()
-        elif self.assigned_pr.transformation == 'asinh':
-            self.assigned_pr.apply_asinh_transform()
-        else:
-            # got some unsupported transform type
-            return False
-
-        # next is normalization of common sample parameters
-        self.assigned_pr.normalize_transformed_samples()
-
-        # next is clustering
-        if self.assigned_pr.clustering == 'hdp':
-            clusters = hdp(self.assigned_pr)
-        else:
-            # only HDP is implemented at this time
-            return False
-
-        return clusters
-
     def report_errors(self):
         """
         It will be called after process() if that method returned False
         """
-        return
-
-    def upload_results(self):
-        """
-        It will be called after process() if that method returns successfully
-        """
-        if self.assigned_pr is None:
-            return
-
-        # TODO: wrap in try to report errors on failure
-        self.assigned_pr.post_clusters()
-
         return
 
 if __name__ == "__main__":

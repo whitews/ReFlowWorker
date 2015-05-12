@@ -1,7 +1,7 @@
-from models import Cluster, SampleCluster, SampleClusterParameter, \
-    SampleClusterComponent, SampleClusterComponentParameter
-
 import numpy as np
+
+from reflowworker.models.models import Cluster, SampleCluster, SampleClusterParameter, \
+    SampleClusterComponent, SampleClusterComponentParameter
 # NOTE: we don't import cluster here because it causes an
 # issue with PyCUDA and our daemonize procedure, see
 # the hdp function for where this is actually imported
@@ -99,7 +99,7 @@ def hdp(process_request):
 
             # grab event from transformed data, and add to map
             event_row = list(x_data[j])
-            event_row.insert(0, sample.event_indices[j])
+            event_row.insert(0, sample.subsample_indices[j])
             event_map[event_class].append(event_row)
 
         # now we have all the events for this sample classified and organized

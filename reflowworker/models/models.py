@@ -1,274 +1,10 @@
 import os
-import re
 from cStringIO import StringIO
 
 from reflowrestclient import utils
-import numpy
+import numpy as np
 import flowio
 import flowutils
-
-BASE_DIR = '/var/tmp/ReFlow-data/'
-
-
-class ProcessRequest(object):
-    """
-    A process request from a ReFlow server.
-    Contains the list of Samples and a list of process input key/values
-    """
-
-    REQUIRED_CATEGORIES = ['transformation', 'clustering']
-
-    def __init__(self, host, token, pr_dict, method):
-        self.host = host
-        self.token = token
-        self.method = method  # 'http://' or 'https://'
-        self.process_request_id = pr_dict['id']
-        self.parent_stage = pr_dict['parent_stage']
-        self.random_seed = None
-        self.sample_collection_id = pr_dict['sample_collection']
-        self.subsample_count = pr_dict['subsample_count']
-        self.directory = "%s%s/process_requests/%s" % (
-            BASE_DIR,
-            self.host,
-            self.process_request_id)
-        self.inputs = pr_dict['inputs']
-        self.samples = list()
-        self.panels = dict()
-        self.transformation = None
-        self.transformation_options = {}
-        self.clustering = None
-        self.clustering_options = {}
-
-        # the results of the processing pipeline will be stored as
-        # a list of Cluster instances
-        self.clusters = list()
-
-        # the param_list will be the normalized order of parameters
-        self.param_list = list()
-
-        # panel_maps will hold the re-ordering of each site panel parameter
-        # keys will be site panel PK, and values will be a list of indices...
-        self.panel_maps = dict()
-
-        self.results_directory = self.directory + "/results"
-
-        if not os.path.exists(self.results_directory):
-            os.makedirs(self.results_directory)
-
-        # lookup the sample collection
-        response = utils.get_sample_collection(
-            self.host,
-            self.token,
-            sample_collection_pk=self.sample_collection_id,
-            method=self.method
-        )
-        if 'data' not in response:
-            return
-
-        for member in response['data']['members']:
-            compensation = self.convert_matrix(member['compensation'])
-            sample = Sample(self, member['sample'], compensation)
-
-            self.samples.append(sample)
-            if sample.site_panel_id not in self.panels:
-                panel_response = utils.get_site_panel(
-                    self.host,
-                    self.token,
-                    sample.site_panel_id,
-                    method=self.method
-                )
-                if 'data' not in response:
-                    continue
-                self.panels[sample.site_panel_id] = panel_response['data']
-
-    @staticmethod
-    def convert_matrix(compensation_string):
-        """
-        Converts the comma delimited text string returned within
-        ReFlow's SampleCollection to a numpy array that the Sample
-        constructor needs
-        """
-        lines = compensation_string.splitlines(False)
-        headers = re.split(',', lines[0])
-        headers = [int(h) for h in headers]
-
-        # create numpy array and add headers
-        np_array = numpy.array(headers)
-
-        # now add the matrix data
-        for line in lines[1:]:
-            line_values = re.split(',', line)
-            for i, value in enumerate(line_values):
-                line_values[i] = float(line_values[i])
-            np_array = numpy.vstack([np_array, line_values])
-
-        return np_array
-
-    def validate_inputs(self):
-        # iterate through the inputs to validate:
-        #     - all the required categories are present
-        #     - there are no mixed implementations
-        #     - the input values are the correct type
-
-        for pr_input in self.inputs:
-            if pr_input['category_name'] == 'transformation':
-                if not self.transformation:
-                    self.transformation = pr_input['implementation_name']
-                elif self.transformation != pr_input['implementation_name']:
-                    # mixed implementations aren't allowed
-                    return False
-                self.transformation_options[pr_input['input_name']] = pr_input['value']
-            elif pr_input['category_name'] == 'clustering':
-                if not self.clustering:
-                    self.clustering = pr_input['implementation_name']
-                elif self.clustering != pr_input['implementation_name']:
-                    # mixed implementations aren't allowed
-                    return False
-                self.clustering_options[pr_input['input_name']] = pr_input['value']
-
-                # TODO: validate value against value_type
-
-        if not self.clustering:
-            # clustering category is required, but missing
-            return False
-
-        try:
-            self.random_seed = int(self.clustering_options['random_seed'])
-        except:
-            return False
-
-        if not self.transformation:
-            self.transformation = 'asinh'  # default xform is asinh
-
-        return True
-
-    def download_samples(self):
-        for s in self.samples:
-            s.download_fcs(self.token)
-
-    def generate_subsamples(self):
-        directory = self.directory + '/preprocessed/subsampled'
-        for s in self.samples:
-            shuffled_indices = numpy.arange(s.event_count)
-            numpy.random.shuffle(shuffled_indices)
-            s.generate_subsample(
-                directory,
-                shuffled_indices[:self.subsample_count]
-            )
-
-    def compensate_samples(self):
-        directory = self.directory + '/preprocessed/comp'
-        for s in self.samples:
-            s.compensate_subsample(directory)
-
-    def apply_logicle_transform(self):
-        directory = self.directory + '/preprocessed/transformed'
-        for s in self.samples:
-            s.apply_logicle_transform(
-                directory,
-                int(self.transformation_options['t']),
-                float(self.transformation_options['w']))
-
-    def apply_asinh_transform(self):
-        """
-        Inverse hyperbolic sine transformation with a pre-scale factor
-        for optimum visualization (and similarity to the logicle transform)
-        """
-        directory = self.directory + '/preprocessed/transformed'
-        for s in self.samples:
-            s.apply_asinh_transform(directory)
-
-    def normalize_transformed_samples(self):
-        directory = self.directory + '/preprocessed/normalized'
-
-        request_params = []
-        for pr_input in self.inputs:
-            if pr_input['category_name'] == 'filtering':
-                if pr_input['implementation_name'] == 'parameters':
-                    if pr_input['input_name'] == 'parameter':
-                        request_params.append(pr_input['value'])
-
-        # get distinct list of parameters common to all panels in this PR
-        param_set = set()
-        for panel in self.panels:
-            for param in self.panels[panel]['parameters']:
-                param_type = param['parameter_type']
-
-                if param_type in ['TIM', 'NUL']:
-                    continue
-
-                value_type = param['parameter_value_type']
-
-                param_str = "_".join([param_type, value_type])
-
-                markers = list()
-                for marker in param['markers']:
-                    markers.append(marker['name'])
-
-                if len(markers) > 0:
-                    markers.sort()
-                    markers = "_".join(markers)
-                    param_str = "_".join([param_str, markers])
-
-                if param['fluorochrome']:
-                    fluoro = param['fluorochrome']['fluorochrome_abbreviation']
-                    param_str = "_".join([param_str, fluoro])
-
-                # limit the set to the requested params filter
-                if param_str in request_params:
-                    param_set.add(param_str)
-
-                param['full_name'] = param_str
-
-        # the param_list will be the normalized order of parameters
-        self.param_list = list(param_set)
-        self.param_list.sort()
-
-        # panel_maps will hold the re-ordering of each site panel parameter
-        # keys will be site panel PK, and values will be a list of indices...
-        self.panel_maps = dict()
-
-        for panel in self.panels:
-            self.panel_maps[panel] = list()
-            # first, iterate through the param_list so the order is correct
-            for p in self.param_list:
-                for param in self.panels[panel]['parameters']:
-                    if 'full_name' in param:
-                        if param['full_name'] == p:
-                            self.panel_maps[panel].append(
-                                param['fcs_number'] - 1)
-
-        for s in self.samples:
-            s.create_normalized(directory, self.panel_maps[s.site_panel_id])
-
-    def set_clusters(self, clusters):
-        self.clusters = clusters
-
-    def post_clusters(self):
-        """
-        POST all clusters and sample clusters (with event classifications)
-        to the ReFlow server. This should only be called after local
-        processing has finished.
-        """
-        # first post the Cluster instances to get their ReFlow PKs
-        for c in self.clusters:
-            # POST only if it has no PK
-            if not c.reflow_pk:
-                # after trying to POST, if no PK we return False
-                if not c.post(
-                        self.host,
-                        self.token,
-                        self.method,
-                        self.process_request_id
-                ):
-                    return False
-
-            # now save all the sample clusters
-            for sc in c.sample_clusters:
-                if not sc.post(self.host, self.token, self.method, c.reflow_pk):
-                    return False
-
-        return True
 
 
 class Sample(object):
@@ -291,9 +27,9 @@ class Sample(object):
 
         self.fcs_path = None  # path to downloaded FCS file
         self.event_count = None  # total event count
-        self.event_indices = None  # indices used for sub-sampling
         self.subsample_path = None  # path to subsampled Numpy array
         self.compensated_path = None  # path to comp'd data (numpy)
+        self.compensated_full_path = None  # path to comp'd full data (numpy)
         self.transformed_path = None  # path to transformed data (numpy)
         self.normalized_path = None  # path to normalized data (numpy)
 
@@ -329,7 +65,7 @@ class Sample(object):
 
         self.site_panel_id = sample_dict['site_panel']
 
-    def download_fcs(self, token):
+    def download_fcs(self, token, download_dir):
         """
         ReFlow Worker sample downloads are kept in BASE_DIR
         organized by host, then sample id
@@ -340,7 +76,6 @@ class Sample(object):
         if not self.host or not self.sample_id:
             return False
 
-        download_dir = BASE_DIR + str(self.host) + '/'
         if not os.path.exists(download_dir):
             os.makedirs(download_dir)
         fcs_path = download_dir + str(self.sample_id) + '.fcs'
@@ -369,12 +104,75 @@ class Sample(object):
 
         return True
 
-    def generate_subsample(self, directory, indices):
+    def generate_subsample(self, subsample_count):
         """
-        Sub-samples FCS sample using random seed
+        Sub-samples FCS sample
 
-        Returns True if subsample succeeded
-        Also updates self.subsample_path & self.event_indices
+        Returns NumPy array if sub-sampling succeeds
+        Also updates self.subsample_indices
+        """
+        if not self.sample_id:
+            return None
+
+        if not (self.fcs_path and os.path.exists(self.fcs_path)):
+            return None
+
+        # open fcs file
+        flow_obj = flowio.FlowData(self.fcs_path)
+
+        # generate random indices for subsample & save indices
+        shuffled_indices = np.arange(self.event_count)
+        np.random.shuffle(shuffled_indices)
+        self.subsample_indices = shuffled_indices[:subsample_count]
+
+        # sub-sample FCS events using given indices
+        # create new 1st column containing the event indices of the
+        # sub-sampled events
+        numpy_data = np.reshape(
+            flow_obj.events,
+            (-1, flow_obj.channel_count)
+        )
+        indexed_subsample = numpy_data[self.subsample_indices]
+
+        return indexed_subsample
+
+    def compensate_events(self, events):
+        """
+        Gets compensation matrix and applies it to the given events
+
+        Returns NumPy array of compensated events if successful
+        """
+        if not self.sample_id:
+            return None
+
+        if not len(self.compensation) > 0:
+            return None
+
+        # self.compensate has headers for the channel numbers, but
+        # flowutils compensate() takes the plain matrix and indices as
+        # separate arguments
+        # (also note channel #'s vs indices)
+        data = np.load(self.subsample_path)
+
+        indices = self.compensation[0, :] - 1  # headers are channel #'s
+        indices = [int(i) for i in indices]
+        comp_matrix = self.compensation[1:, :]  # just the matrix
+        comp_data = flowutils.compensate.compensate(
+            events,
+            comp_matrix,
+            indices
+        )
+
+        return comp_data
+
+    # TODO: remove this and use above compensate_events
+    def compensate_full_sample(self, directory):
+        """
+        Gets compensation matrix and applies it to the full sample, saving
+        compensated data in given directory
+
+        Returns False if the FCS sample has not been downloaded or
+        if the compensation fails
         """
         if not self.sample_id:
             return False
@@ -385,63 +183,20 @@ class Sample(object):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        # open fcs file
-        flow_obj = flowio.FlowData(self.fcs_path)
-
-        # sub-sample FCS events using given indices
-        # create new 1st column containing the event indices of the
-        # sub-sampled events
-        numpy_data = numpy.reshape(
-            flow_obj.events,
-            (-1, flow_obj.channel_count)
-        )
-        indexed_subsample = numpy.insert(
-            numpy_data[indices],
-            0,
-            indices,
-            axis=1
-        )
-
-        # Save sub-sampled events as NumPy array in given directory
-        subsample_path = "%s/sub_%s.npy" % (
-            directory,
-            str(self.sample_id)
-        )
-        numpy.save(subsample_path, indexed_subsample)
-
-        self.subsample_path = subsample_path
-        self.event_indices = indices
-
-        return True
-
-    def compensate_subsample(self, directory):
-        """
-        Gets compensation matrix and applies it to the subsample, saving
-        compensated data in given directory
-
-        Returns False if the subsample has not been downloaded or
-        if the compensation fails or if the directory given doesn't exist
-        """
-        if not self.sample_id:
-            return False
-
-        if not (self.subsample_path and os.path.exists(self.subsample_path)):
-            return False
-
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
         if not len(self.compensation) > 0:
             return False
 
+        # open fcs file and get event data
+        flow_obj = flowio.FlowData(self.fcs_path)
+        data = np.reshape(
+            flow_obj.events,
+            (-1, flow_obj.channel_count)
+        )
+
         # self.compensate has headers for the channel numbers, but
-        # flowutils compensate() takes the plain matrix and indices as
+        # FlowUtils compensate() takes the plain matrix and indices as
         # separate arguments
         # (also note channel #'s vs indices)
-        data = numpy.load(self.subsample_path)
-
-        # note the 1st data column are event indices, we'll throw these away
-        data = data[:, 1:]
         indices = self.compensation[0, :] - 1  # headers are channel #'s
         indices = [int(i) for i in indices]
         comp_matrix = self.compensation[1:, :]  # just the matrix
@@ -453,18 +208,18 @@ class Sample(object):
 
         data[:, indices] = comp_data
 
-        # we name these as compd_<id>.npy to differentiate between the
+        # we name these as compd_full_<id>.npy to differentiate between the
         # comp matrix files which use comp_<id>.npy even though they are
         # in a different directory...in case anyone ever moves stuff around
         # things won't clobber each other
-        compensated_path = "%s/compd_%s.npy" % (
+        compensated_path = "%s/compd_full_%s.npy" % (
             directory,
             str(self.sample_id)
         )
 
-        numpy.save(compensated_path, data)
+        np.save(compensated_path, data)
 
-        self.compensated_path = compensated_path
+        self.compensated_full_path = compensated_path
 
         return True
 
@@ -473,7 +228,8 @@ class Sample(object):
             directory,
             logicle_t,
             logicle_w,
-            use_comp=True):
+            use_comp=True,
+            use_subsample=True):
         """
         Transforms sample data
 
@@ -493,7 +249,7 @@ class Sample(object):
                     os.path.exists(self.compensated_path)):
                 return False
             else:
-                data = numpy.load(self.compensated_path)
+                data = np.load(self.compensated_path)
         else:
             if not (
                     self.subsample_path
@@ -501,7 +257,7 @@ class Sample(object):
                     os.path.exists(self.subsample_path)):
                 return False
             else:
-                data = numpy.load(self.subsample_path)
+                data = np.load(self.subsample_path)
 
         if not os.path.exists(directory):
             os.makedirs(directory)
@@ -530,7 +286,7 @@ class Sample(object):
             directory,
             str(self.sample_id)
         )
-        numpy.save(transformed_path, x_data)
+        np.save(transformed_path, x_data)
 
         self.transformed_path = transformed_path
 
@@ -554,12 +310,12 @@ class Sample(object):
             if not (self.compensated_path and os.path.exists(self.compensated_path)):
                 return False
             else:
-                data = numpy.load(self.compensated_path)
+                data = np.load(self.compensated_path)
         else:
             if not (self.subsample_path and os.path.exists(self.subsample_path)):
                 return False
             else:
-                data = numpy.load(self.subsample_path)
+                data = np.load(self.subsample_path)
 
         if not os.path.exists(directory):
             os.makedirs(directory)
@@ -587,7 +343,7 @@ class Sample(object):
             directory,
             str(self.sample_id)
         )
-        numpy.save(transformed_path, x_data)
+        np.save(transformed_path, x_data)
 
         self.transformed_path = transformed_path
 
@@ -598,11 +354,11 @@ class Sample(object):
             os.makedirs(directory)
 
         if self.transformed_path:
-            data = numpy.load(self.transformed_path)
+            data = np.load(self.transformed_path)
         elif self.compensated_path:
-            data = numpy.load(self.compensated_path)
+            data = np.load(self.compensated_path)
         else:
-            data = numpy.load(self.subsample_path)
+            data = np.load(self.subsample_path)
 
         norm_data = data[:, channel_map]
 
@@ -611,7 +367,7 @@ class Sample(object):
             str(self.sample_id)
         )
 
-        numpy.save(normalized_path, norm_data)
+        np.save(normalized_path, norm_data)
 
         self.normalized_path = normalized_path
 
@@ -678,7 +434,7 @@ class SampleCluster(object):
 
             # convert covariance to string
             covariance = StringIO()
-            numpy.savetxt(covariance, comp.covariance, fmt="%d", delimiter=',')
+            np.savetxt(covariance, comp.covariance, fmt="%d", delimiter=',')
 
             # convert component parameter locations from class instance to dict
             comp_param_dict = dict()
