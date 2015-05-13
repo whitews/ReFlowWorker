@@ -114,6 +114,22 @@ class Sample(object):
 
         return True
 
+    def get_all_events(self):
+        """
+        Returns NumPy array if all events in FCS file
+        """
+        if not (self.fcs_path and os.path.exists(self.fcs_path)):
+            return None
+
+        # open fcs file & convert events to NumPy array
+        flow_obj = flowio.FlowData(self.fcs_path)
+        numpy_data = np.reshape(
+            flow_obj.events,
+            (-1, flow_obj.channel_count)
+        )
+
+        return numpy_data
+
     def generate_subsample(self, subsample_count):
         """
         Sub-samples FCS sample
@@ -136,8 +152,6 @@ class Sample(object):
         self.subsample_indices = shuffled_indices[:subsample_count]
 
         # sub-sample FCS events using given indices
-        # create new 1st column containing the event indices of the
-        # sub-sampled events
         numpy_data = np.reshape(
             flow_obj.events,
             (-1, flow_obj.channel_count)
