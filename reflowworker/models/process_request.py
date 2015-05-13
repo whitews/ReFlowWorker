@@ -144,16 +144,8 @@ class ProcessRequest(object):
         if not self.transformation:
             self.transformation = 'asinh'  # default xform is asinh
 
-        return True
-
-    def _download_samples(self):
-        download_dir = BASE_DIR + str(self.host) + '/'
-        for s in self.samples:
-            s.download_fcs(self.token, download_dir)
-
-    def _normalize_transformed_samples(self):
-        directory = self.directory + '/preprocessed/normalized'
-
+        # Finally, we need to generate the panel maps used for "normalizing"
+        # the samples
         request_params = []
         for pr_input in self.inputs:
             if pr_input['category_name'] == 'filtering':
@@ -212,13 +204,16 @@ class ProcessRequest(object):
                                 param['fcs_number'] - 1
                             )
 
-        for s in self.samples:
-            s.create_normalized(directory, self.panel_maps[s.site_panel_id])
+        return True
 
-    def _preprocess(self):
+    def _download_samples(self):
+        download_dir = BASE_DIR + str(self.host) + '/'
+        for s in self.samples:
+            s.download_fcs(self.token, download_dir)
+
+    def _pre_process(self):
         if self.parent_stage is None:
             # we've got a simple 1st stage PR
-            # first, generate sub-sampled data sets
             for s in self.samples:
                 # Sub-sample events
                 subsample = s.generate_subsample(self.subsample_count)
@@ -232,8 +227,15 @@ class ProcessRequest(object):
                 elif self.transformation == 'asinh':
                     xform = s.apply_asinh_transform(comped_sub)
 
-            # next is normalization of common sample parameters
-            self._normalize_transformed_samples()
+                # save xform as pre-processed data
+                s.create_preprocessed(xform, self.directory + '/preprocessed')
+
+                # next is normalization of common sample parameters
+                s.create_normalized(
+                    xform,
+                    self.directory + '/normalized',
+                    self.panel_maps[s.site_panel_id]
+                )
         else:
             # we've got a 2nd stage PR, so much more pre-processing to do...
             # Since only a few of the 1st stage clusters were selected
@@ -253,7 +255,7 @@ class ProcessRequest(object):
                 # got some unsupported transform type
                 return False
 
-            for sample in self.samples:
+            for s in self.samples:
                 # compensate the full FCS file
                 s.compensate_full_sample(directory)
 
@@ -262,7 +264,7 @@ class ProcessRequest(object):
                     self.host,
                     self.token,
                     process_request_pk=self.parent_stage,
-                    sample_pk=sample.sample_id,
+                    sample_pk=s.sample_id,
                     method=self.method
                 )
                 print('asdf')
@@ -296,7 +298,7 @@ class ProcessRequest(object):
         # Pre-process data...takes care of various combinations of tasks
         # Afterward, all samples' subsampled data files will be available &
         # ready for analysis
-        if not self._preprocess():
+        if not self._pre_process():
             raise ValueError("Error occurred during pre-processing")
 
         # next is clustering
