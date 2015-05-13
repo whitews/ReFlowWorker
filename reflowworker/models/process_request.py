@@ -50,12 +50,6 @@ class ProcessRequest(object):
         # keys will be site panel PK, and values will be a list of indices...
         self.panel_maps = dict()
 
-        # TODO: is this necessary anymore?
-        self.results_directory = self.directory + "/results"
-
-        if not os.path.exists(self.results_directory):
-            os.makedirs(self.results_directory)
-
         # for 2nd stage processes, make an enrichment sub-dir in pre-processing
         if self.parent_stage is not None:
             self.enrichment_directory = self.directory + "/preprocessing/enrichment"
