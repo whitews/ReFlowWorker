@@ -341,7 +341,7 @@ class SampleCluster(object):
 
             # convert covariance to string
             covariance = StringIO()
-            np.savetxt(covariance, comp.covariance, fmt="%d", delimiter=',')
+            np.savetxt(covariance, comp.covariance, fmt="%.6f", delimiter=',')
 
             # convert component parameter locations from class instance to dict
             comp_param_dict = dict()
