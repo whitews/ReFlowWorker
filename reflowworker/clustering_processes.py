@@ -1,6 +1,6 @@
 import numpy as np
 
-from reflowworker.models.sample_models import *
+from models.sample_models import *
 # NOTE: we don't import cluster here because it causes an
 # issue with PyCUDA and our daemonize procedure, see
 # the hdp function for where this is actually imported
@@ -81,7 +81,7 @@ def hdp(process_request):
         # Grab events from transformed data set b/c the normalized data
         # doesn't have all columns.
         # transformed data already has the original index in 1st column
-        x_data = np.load(sample.transformed_path)
+        x_data = np.load(sample.preprocessed_path)
 
         # Group event indices by the modal mixture mode for this sample.
         # event_map holds the event data plus the event's index (as 1st column)
