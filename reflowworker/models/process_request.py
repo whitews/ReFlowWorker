@@ -5,7 +5,7 @@ import os
 import re
 import numpy as np
 from reflowrestclient import utils
-
+from flowstats.dp_cluster import DPCluster, DPMixture
 
 BASE_DIR = '/var/tmp/ReFlow-data/'
 
@@ -52,7 +52,13 @@ class ProcessRequest(object):
 
         # for 2nd stage processes, make an enrichment sub-dir in pre-processing
         if self.parent_stage is not None:
-            self.enrichment_directory = self.directory + "/preprocessing/enrichment"
+            self.enrichment_directory = "/".join(
+                [
+                    self.directory,
+                    "preprocessing",
+                    "enrichment"
+                ]
+            )
 
             if not os.path.exists(self.enrichment_directory):
                 os.makedirs(self.enrichment_directory)
@@ -121,7 +127,8 @@ class ProcessRequest(object):
                 elif self.transformation != pr_input['implementation_name']:
                     # mixed implementations aren't allowed
                     return False
-                self.transformation_options[pr_input['input_name']] = pr_input['value']
+                self.transformation_options[pr_input['input_name']] = \
+                    pr_input['value']
             elif pr_input['category_name'] == 'clustering':
                 if not self.clustering:
                     self.clustering = pr_input['implementation_name']
@@ -243,21 +250,18 @@ class ProcessRequest(object):
             # classify all events in order to enrich a new sub-sample with
             # just events from those selected clusters
 
-            # first compensate the full samples
-            self._compensate_samples(subsample=False)
-
-            # next is transformation
-            if self.transformation == 'logicle':
-                self._apply_logicle_transform()
-            elif self.transformation == 'asinh':
-                self._apply_asinh_transform()
-            else:
-                # got some unsupported transform type
-                return False
-
             for s in self.samples:
-                # compensate the full FCS file
-                s.compensate_full_sample(directory)
+                # get all events
+                data = s.get_all_events()
+
+                # compensate all events
+                data = s.compensate_events(data)
+
+                # transform all events
+                if self.transformation == 'logicle':
+                    data = s.apply_logicle_transform(data)
+                elif self.transformation == 'asinh':
+                    data = s.apply_asinh_transform(data)
 
                 # Retrieve this sample's components from parent stage
                 components = utils.get_sample_cluster_components(
@@ -267,22 +271,40 @@ class ProcessRequest(object):
                     sample_pk=s.sample_id,
                     method=self.method
                 )
+
+                dp_clusters = []
+                for comp in components['data']:
+                    # use the channel order from the covariance matrix to
+                    # avoid re-arranging the covariance matrix
+                    # all the covariance matrices in all components will have
+                    # been saved in the same order from the 1st stage
+                    covariance = []
+                    for l in comp['covariance_matrix'].splitlines():
+                        covariance.append(
+                            [float(n) for n in l.split(',')]
+                        )
+
+                    indices = covariance.pop(0)
+                    indices = [int(i) for i in indices]
+                    covariance = np.array(covariance)
+                    locations = []
+                    for i in indices:
+                        for c in comp['parameters']:
+                            if (c['channel'] - 1) == i:
+                                locations.append(c['location'])
+
+                    dp_clusters.append(
+                        DPCluster(
+                            comp['weight'],
+                            locations,
+                            covariance
+                        )
+                    )
+
+                dp_mixture = DPMixture(dp_clusters)
+                classifications = dp_mixture.classify(data[:, indices])
                 print('asdf')
-
-            # Compensate the full data sets first
-            self._compensate_samples(subsample=False)
-
-            # next is transformation
-            if self.transformation == 'logicle':
-                self._apply_logicle_transform(subsample=False)
-            elif self.transformation == 'asinh':
-                self._apply_asinh_transform(subsample=False)
-            else:
-                # got some unsupported transform type
-                return False
-
-            # # next is normalization of common sample parameters
-            # self.assigned_pr.normalize_transformed_samples()
+        return True
 
     def analyze(self):
         # First, validate the inputs
