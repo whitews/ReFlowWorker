@@ -185,7 +185,9 @@ class Sample(object):
             indices
         )
 
-        return comp_data
+        events[:, indices] = comp_data
+
+        return events
 
     def apply_logicle_transform(self, data, logicle_t, logicle_w):
         """
