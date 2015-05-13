@@ -25,12 +25,26 @@ class Sample(object):
         self.sample_id = sample_dict['id']
         self.compensation = compensation
 
-        self.fcs_path = None  # path to downloaded FCS file
-        self.event_count = None  # total event count
-        self.subsample_path = None  # path to subsampled Numpy array
+        # there are 3 files used for analysis, we store their paths:
+        #   fcs_path:
+        #       downloaded FCS file
+        #   preprocessed_path:
+        #       NumPy array of preprocessed events including all channels.
+        #       Pre-processed generally means compensated, transformed, &
+        #       sub-sampled
+        #   normalized_path:
+        #       NumPy array of preprocessed events with only the columns
+        #       corresponding to the parameters requested for analysis. Also,
+        #       the column order has been "normalized" meaning the columns have
+        #       been rearranged so all columns are the same across all samples
+        #       in the process request.
+        self.fcs_path = None
+        self.preprocessed_path = None
+        self.normalized_path = None
 
-        # need to save sub-sampled indices for the clustering output
-        # if sample is using full FCS data, the indices aren't needed
+        self.event_count = None  # total event count
+
+        # Save sub-sampled indices for the clustering output
         self.subsample_indices = None
 
         self.acquisition_date = sample_dict['acquisition_date']
@@ -224,8 +238,29 @@ class Sample(object):
 
         return x_data
 
-    def create_normalized(self, data, channel_map):
-        return data[:, channel_map]
+    def create_preprocessed(self, data, directory):
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        self.preprocessed_path = "%s/pre_%s.npy" % (
+            directory,
+            str(self.sample_id)
+        )
+
+        np.save(self.preprocessed_path, data)
+
+    def create_normalized(self, data, directory, channel_map):
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        norm_data = data[:, channel_map]
+
+        self.normalized_path = "%s/norm_%s.npy" % (
+            directory,
+            str(self.sample_id)
+        )
+
+        np.save(self.normalized_path, norm_data)
 
 
 class Cluster(object):
