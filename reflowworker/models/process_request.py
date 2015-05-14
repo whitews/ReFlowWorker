@@ -1,7 +1,6 @@
 from sample_models import Sample
 from reflowworker.clustering_processes import hdp
 
-import os
 import re
 import numpy as np
 from reflowrestclient import utils
@@ -15,9 +14,6 @@ class ProcessRequest(object):
     A process request from a ReFlow server.
     Contains the list of Samples and a list of process input key/values
     """
-
-    REQUIRED_CATEGORIES = ['transformation', 'clustering']
-
     def __init__(self, host, token, pr_dict, method):
         self.host = host
         self.token = token
@@ -35,7 +31,6 @@ class ProcessRequest(object):
         self.samples = list()
         self.panels = dict()
         self.transformation = None
-        self.transformation_options = {}
         self.clustering = None
         self.clustering_options = {}
 
@@ -50,21 +45,6 @@ class ProcessRequest(object):
         # keys will be site panel PK, and values will be a list of indices...
         self.panel_maps = dict()
 
-        # for 2nd stage processes, make an enrichment sub-dir in pre-processing
-        if self.parent_stage is not None:
-            self.enrichment_directory = "/".join(
-                [
-                    self.directory,
-                    "preprocessing",
-                    "enrichment"
-                ]
-            )
-
-            if not os.path.exists(self.enrichment_directory):
-                os.makedirs(self.enrichment_directory)
-        else:
-            self.enrichment_directory = None
-
         # lookup the sample collection
         response = utils.get_sample_collection(
             self.host,
@@ -72,9 +52,8 @@ class ProcessRequest(object):
             sample_collection_pk=self.sample_collection_id,
             method=self.method
         )
-        if 'data' not in response:
-            return
 
+        # populate self.samples w/Sample instances w/compensation
         for member in response['data']['members']:
             compensation = self.convert_matrix(member['compensation'])
             sample = Sample(self, member['sample'], compensation)
@@ -119,7 +98,6 @@ class ProcessRequest(object):
         #     - all the required categories are present
         #     - there are no mixed implementations
         #     - the input values are the correct type
-
         for pr_input in self.inputs:
             if pr_input['category_name'] == 'transformation':
                 if not self.transformation:
@@ -127,8 +105,6 @@ class ProcessRequest(object):
                 elif self.transformation != pr_input['implementation_name']:
                     # mixed implementations aren't allowed
                     return False
-                self.transformation_options[pr_input['input_name']] = \
-                    pr_input['value']
             elif pr_input['category_name'] == 'clustering':
                 if not self.clustering:
                     self.clustering = pr_input['implementation_name']
