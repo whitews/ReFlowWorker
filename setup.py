@@ -14,7 +14,7 @@ setup(
         'numpy>=1.6',
         'reflowrestclient',
         'flowio',
-        'flowutils',
+        'flowutils==0.3',
         'flowstats'
     ]
 )
