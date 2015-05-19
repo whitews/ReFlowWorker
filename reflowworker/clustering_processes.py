@@ -118,7 +118,7 @@ def hdp(process_request):
             # Create SampleClusterComponents for each component of this
             # mode for this sample
             components = list()
-            for l, comp in enumerate(modal_mixture.cmap[event_class]):
+            for comp in modal_mixture.cmap[event_class]:
                 # get the comp parameters first
                 sc_comp_parameters = list()
                 for k, channel in enumerate(
@@ -126,7 +126,7 @@ def hdp(process_request):
                     sc_comp_parameters.append(
                         SampleClusterComponentParameter(
                             channel_number=channel + 1,
-                            location=modal_mixture.mus[l][k]
+                            location=modal_mixture.mus[comp][k]
                         )
                     )
 
