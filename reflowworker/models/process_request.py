@@ -19,7 +19,14 @@ class ProcessRequest(object):
         self.token = token
         self.method = method  # 'http://' or 'https://'
         self.process_request_id = pr_dict['id']
+
+        # 2nd stage processing stuff
         self.parent_stage = pr_dict['parent_stage']
+        # stores the PK of the parent clusters to use for enrichment
+        self.parent_clusters = []
+        for c in pr_dict['stage2_clusters']:
+            self.parent_clusters.append(c['cluster'])
+
         self.random_seed = None
         self.sample_collection_id = pr_dict['sample_collection']
         self.subsample_count = pr_dict['subsample_count']
@@ -248,8 +255,16 @@ class ProcessRequest(object):
                     method=self.method
                 )
 
+                # create the DPCluster instances & save a map of the
+                # components that belong to the specified clusters from stage 1
                 dp_clusters = []
-                for comp in components['data']:
+                enrich_components = []
+                for comp_idx, comp in enumerate(components['data']):
+                    # determine if this comp was a member of a user-specified
+                    # cluster to include for analysis
+                    if comp['cluster'] in self.parent_clusters:
+                        enrich_components.append(comp_idx)
+
                     # use the channel order from the covariance matrix to
                     # avoid re-arranging the covariance matrix
                     # all the covariance matrices in all components will have
@@ -259,10 +274,10 @@ class ProcessRequest(object):
                         covariance.append(
                             [float(n) for n in l.split(',')]
                         )
-
                     indices = covariance.pop(0)
                     indices = [int(i) for i in indices]
                     covariance = np.array(covariance)
+
                     locations = []
                     for i in indices:
                         for c in comp['parameters']:
@@ -279,7 +294,16 @@ class ProcessRequest(object):
 
                 dp_mixture = DPMixture(dp_clusters)
                 classifications = dp_mixture.classify(data[:, indices])
-                print('asdf')
+                enrich_indices = []
+                for ec in enrich_components:
+                    # note: where returns a tuple where first item is a
+                    # numpy array containing the indices...probably does this
+                    # for compatibility with numpy fancy indexing
+                    enrich_indices.extend(
+                        np.where(classifications == ec)[0]
+                    )
+
+                print 'asdf'
         return True
 
     def analyze(self):
