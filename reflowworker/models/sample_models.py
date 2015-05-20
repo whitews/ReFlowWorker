@@ -156,9 +156,9 @@ class Sample(object):
             flow_obj.events,
             (-1, flow_obj.channel_count)
         )
-        indexed_subsample = numpy_data[self.subsample_indices]
+        subsample = numpy_data[self.subsample_indices]
 
-        return indexed_subsample
+        return subsample
 
     def compensate_events(self, events):
         """

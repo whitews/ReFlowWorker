@@ -303,7 +303,22 @@ class ProcessRequest(object):
                         np.where(classifications == ec)[0]
                     )
 
-                print 'asdf'
+                # shuffle the enriched indices and draw our subsample
+                # saving the chosen indices for the sample
+                np.random.shuffle(enrich_indices)
+                s.subsample_indices = enrich_indices[:self.subsample_count]
+
+                # save subsample as pre-processed data
+                s.create_preprocessed(
+                    data[s.subsample_indices], self.directory + '/preprocessed'
+                )
+
+                # next is normalization of common sample parameters
+                s.create_normalized(
+                    data[s.subsample_indices],
+                    self.directory + '/normalized',
+                    self.panel_maps[s.site_panel_id]
+                )
         return True
 
     def analyze(self):
