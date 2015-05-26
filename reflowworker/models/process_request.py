@@ -4,7 +4,6 @@ from reflowworker.clustering_processes import hdp
 import re
 import numpy as np
 from reflowrestclient import utils
-from flowstats.dp_cluster import DPCluster, DPMixture
 
 BASE_DIR = '/var/tmp/ReFlow-data/'
 
@@ -257,6 +256,9 @@ class ProcessRequest(object):
 
                 # create the DPCluster instances & save a map of the
                 # components that belong to the specified clusters from stage 1
+                # NOTE: we import this here to avoid a PyCUDA issue when starting up
+                # the daemonize procedure
+                from flowstats.dp_cluster import DPCluster, DPMixture
                 dp_clusters = []
                 enrich_components = []
                 for comp_idx, comp in enumerate(components['data']):
