@@ -1,6 +1,8 @@
 import numpy as np
 
-from models.sample_models import *
+from models.sample_models import Cluster, SampleCluster, \
+    SampleClusterParameter, SampleClusterComponent, \
+    SampleClusterComponentParameter
 # NOTE: we don't import cluster here because it causes an
 # issue with PyCUDA and our daemonize procedure, see
 # the hdp function for where this is actually imported
