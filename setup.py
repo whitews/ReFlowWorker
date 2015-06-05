@@ -12,6 +12,7 @@ setup(
     install_requires=[
         'requests>=1.1.0',
         'numpy>=1.6',
+        'pycuda>=2013.1.1',
         'reflowrestclient',
         'flowio',
         'flowutils==0.3',
