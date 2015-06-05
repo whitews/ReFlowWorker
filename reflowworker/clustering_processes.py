@@ -9,7 +9,7 @@ from models.sample_models import Cluster, SampleCluster, \
 # from flowstats import cluster
 
 
-def hdp(process_request):
+def hdp(process_request, device):
     iteration_count = int(process_request.clustering_options['iteration_count'])
     cluster_count = int(process_request.clustering_options['cluster_count'])
 
@@ -38,7 +38,7 @@ def hdp(process_request):
         )
         results = model.fit(
             data_sets,
-            True,
+            [device],
             seed=random_seed,
             munkres_id=True,
             verbose=True
@@ -52,7 +52,7 @@ def hdp(process_request):
         )
         results = model.fit(
             data_sets[0],
-            True,
+            [device],
             seed=random_seed,
             munkres_id=True,
             verbose=True

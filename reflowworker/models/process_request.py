@@ -79,8 +79,8 @@ class ProcessRequest(object):
     @staticmethod
     def convert_matrix(compensation_string):
         """
-        Converts the comma delimited text string returned within
-        ReFlow's SampleCollection to a numpy array that the Sample
+        Converts the comma delimited text string returned from
+        ReFlow to a numpy array that the Sample
         constructor needs
         """
         lines = compensation_string.splitlines(False)
@@ -210,7 +210,7 @@ class ProcessRequest(object):
                 # Compensate the sub-sampled events
                 comped_sub = s.compensate_events(subsample)
 
-                # Apply specified transform to comp'd events
+                # Apply specified transform to compensated events
                 if self.transformation == 'logicle':
                     xform = s.apply_logicle_transform(comped_sub)
                 elif self.transformation == 'asinh':
@@ -256,8 +256,8 @@ class ProcessRequest(object):
 
                 # create the DPCluster instances & save a map of the
                 # components that belong to the specified clusters from stage 1
-                # NOTE: we import this here to avoid a PyCUDA issue when starting up
-                # the daemonize procedure
+                # NOTE: we import this here to avoid a PyCUDA issue when
+                # starting up the daemonize procedure
                 from flowstats.dp_cluster import DPCluster, DPMixture
                 dp_clusters = []
                 enrich_components = []
@@ -323,7 +323,7 @@ class ProcessRequest(object):
                 )
         return True
 
-    def analyze(self):
+    def analyze(self, device):
         # First, validate the inputs
         if not self._validate_inputs():
             raise ValueError("Invalid process request inputs")
@@ -342,7 +342,7 @@ class ProcessRequest(object):
 
         # next is clustering
         if self.clustering == 'hdp':
-            self.clusters = hdp(self)
+            self.clusters = hdp(self, device)
         else:
             # only HDP is implemented at this time
             raise ValueError("Unsupported clustering type")

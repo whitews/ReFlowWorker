@@ -2,11 +2,14 @@ import json
 import logging
 import sys
 import time
+import multiprocessing
+
+import pycuda.driver as cuda
 
 from reflowrestclient import utils
 
 from daemon import Daemon
-from models.process_request import ProcessRequest
+from worker_process import WorkerProcess
 
 
 WORKER_CONF = '/etc/reflow_worker.conf'
@@ -15,17 +18,21 @@ DEFAULT_SLEEP = 15  # in seconds
 
 
 class Worker(Daemon):
+    """
+    The Worker runs as a background process, much like a service, so try
+    VERY hard not to exit unless there's a catastrophic failure like the
+    worker config file is malformed. In other cases, just capture and log
+    all Exceptions and Errors
+    """
     def __init__(self):
         # a Worker can have only one host
         self.host = None
         self.name = None
         self.token = None
-        self.genuine = False
-        self.assigned_pr = None
-        self.errors = list()
-
-        # default sleep time between checking the server (in seconds)
-        self.sleep = DEFAULT_SLEEP
+        # dictionary of devices where the key is the GPU device ID, and
+        # the value is the ProcessRequest PK if the device is working, or
+        # None if the device is free
+        self.devices = {}
 
         # setup logging
         try:
@@ -48,6 +55,20 @@ class Worker(Daemon):
                 "Caught exception while opening %s" %
                 WORKER_CONF)
             logging.exception("%s" % e.message)
+            sys.exit(1)
+
+        # look for the list of CUDA devices in config file &
+        # test the device numbers as valid CUDA devices
+        try:
+            cuda.init()
+            for device in worker_json['devices']:
+                cuda.Device(device)
+                self.devices[device] = None  # not currently working
+        except Exception as e:
+            logging.warning("Exception: %s", e.message)
+            message = "No devices found in config file:  %s.\n"
+            logging.error(message % WORKER_CONF)
+            logging.error("Exiting since device list not found")
             sys.exit(1)
 
         # look for the host in config file
@@ -94,8 +115,7 @@ class Worker(Daemon):
                 self.token,
                 method=self.method
             )
-            self.genuine = result['data']['worker']  # should be True
-            if self.genuine is not True:
+            if result['data']['worker'] is not True:
                 raise Exception
         except Exception, e:
             message = "Could not verify worker %s with host %s\n"
@@ -111,14 +131,62 @@ class Worker(Daemon):
 
     def _run(self):
         while True:
-            self.__loop()
-            if self.assigned_pr is None:
-                time.sleep(self.sleep)
+            # check in on our children
+            working_requests = []
+            for p in multiprocessing.active_children():
+                if type(p) is WorkerProcess:
+                    working_requests.append(
+                        p.assigned_pr.process_request_id
+                    )
 
-    def __loop(self):
-        # Once inside the loop, try, pun intended, VERY hard not to exit,
-        # just capture and log all Exceptions and Errors
+            # free any devices that are no longer working
+            for gpu_id in self.devices:
+                if self.devices[gpu_id] not in working_requests:
+                    self.devices[gpu_id] = None
 
+            print self.devices
+            if len(working_requests) < len(self.devices):
+                self.launch_workers()
+                self.request_assignments()
+
+            time.sleep(DEFAULT_SLEEP)
+
+    def get_available_devices(self):
+        available_devices = []
+        for gpu_id in self.devices:
+            if self.devices[gpu_id] is None:
+                available_devices.append(gpu_id)
+        return available_devices
+
+    def request_assignments(self):
+        available_devices = self.get_available_devices()
+
+        if len(available_devices) > 0:
+            try:
+                viable_requests = utils.get_viable_process_requests(
+                    self.host,
+                    self.token,
+                    method=self.method
+                )
+                for request in viable_requests['data']:
+                    # Request assignments for the number of available devices
+                    if len(available_devices) <= 0:
+                        return
+
+                    # request ProcessRequest assignment
+                    utils.request_pr_assignment(
+                        self.host,
+                        self.token,
+                        request['id'],
+                        method=self.method
+                    )
+                    available_devices.pop()
+            except Exception as e:
+                logging.warning("Exception: ", e.message)
+                return
+
+    def launch_workers(self):
+        # If we get here then there are devices available for processing.
         # First, see if the ReFlow server already has stuff assigned to us
         try:
             query_assignment_response = utils.get_assigned_process_requests(
@@ -126,163 +194,33 @@ class Worker(Daemon):
                 self.token,
                 method=self.method
             )
-            if len(query_assignment_response['data']) > 0:
-                # get the 1st PR in the list
-                pr_response = utils.get_process_request(
+
+            # iterate through assigned PRs
+            for pr in query_assignment_response['data']:
+                # check if the PR is already being worked on
+                if pr['id'] in self.devices.values():
+                    continue
+
+                # see if we have an available device
+                available_devices = self.get_available_devices()
+
+                if len(available_devices) <= 0:
+                        return
+
+                gpu_id = available_devices.pop(0)
+                process = WorkerProcess(
                     self.host,
                     self.token,
-                    query_assignment_response['data'][0]['id'],
-                    method=self.method
+                    self.method,
+                    pr['id'],
+                    gpu_id
                 )
-                self.assigned_pr = ProcessRequest(
-                    self.host,
-                    self.token,
-                    pr_response['data'],
-                    self.method
-                )
+                process.start()
+                self.devices[gpu_id] = pr['id']
+
         except Exception as e:
             logging.warning("Exception: %s", e.message)
             return
-
-        # If we don't already have an assignment, see if any work is available
-        if self.assigned_pr is None:
-            try:
-                viable_requests = utils.get_viable_process_requests(
-                    self.host,
-                    self.token,
-                    method=self.method
-                )
-            except Exception as e:
-                logging.warning("Exception: ", e.message)
-                return
-
-            if 'data' not in viable_requests:
-                logging.warning(
-                    "Malformed response from ReFlow server attempting " +
-                    "to get viable process requests.")
-                return
-            if not isinstance(viable_requests['data'], list):
-                logging.warning(
-                    "Malformed response from ReFlow " +
-                    "server attempting to get viable process requests.")
-                return
-
-            if not len(viable_requests['data']) > 0:
-                return
-
-            for request in viable_requests['data']:
-                # request ProcessRequest assignment
-                try:
-                    assignment_response = utils.request_pr_assignment(
-                        self.host,
-                        self.token,
-                        request['id'],
-                        method=self.method
-                    )
-                except Exception as e:
-                    logging.warning("Exception: ", e.message)
-
-                if 'status' not in assignment_response:
-                    continue
-                if not assignment_response['status'] == 201:
-                    continue
-
-                # check the response,
-                # if 201 then our assignment request was granted and
-                # we'll verify we have the assignment
-                try:
-                    verify_assignment_response = utils.verify_pr_assignment(
-                        self.host,
-                        self.token,
-                        request['id'],
-                        method=self.method
-                    )
-                    if verify_assignment_response['data']['assignment']:
-                        # we've got assignment, stop iterating over viable
-                        break
-                except Exception as e:
-                    logging.warning("Exception: ", e.message)
-                    return
-        else:
-            # We've got something to do!
-            try:
-                self.assigned_pr.analyze()
-            except Exception, e:
-                logging.exception(e.message)
-                self.report_errors()
-                return
-
-            # Verify assignment once again
-            try:
-                verify_assignment_response = utils.verify_pr_assignment(
-                    self.host,
-                    self.token,
-                    self.assigned_pr.process_request_id,
-                    method=self.method
-                )
-                if not verify_assignment_response['data']['assignment']:
-                    # we're not assigned anymore, delete our PR and return
-                    self.assigned_pr = None
-                    raise Exception("Server revoked our assignment")
-            except Exception as e:
-                logging.exception(e.message)
-                return
-
-            # Upload results
-            try:
-                self.assigned_pr.post_clusters()
-            except Exception as e:
-                logging.exception(e.message)
-                return
-
-            # Report the ProcessRequest is complete
-            try:
-                verify_complete_response = utils.complete_pr_assignment(
-                    self.host,
-                    self.token,
-                    self.assigned_pr.process_request_id,
-                    method=self.method
-                )
-                if verify_complete_response['status'] != 200:
-                    # something went wrong
-                    raise Exception("Server rejected our 'Complete' request")
-            except Exception as e:
-                logging.exception(e.message)
-                return
-
-            # Verify 'Complete' status
-            try:
-                r = utils.get_process_request(
-                    self.host,
-                    self.token,
-                    self.assigned_pr.process_request_id,
-                    method=self.method
-                )
-                if 'data' not in r:
-                    raise Exception("Improper host response, no 'data' key")
-                if 'status' not in r['data']:
-                    raise Exception("Improper host response, no 'status' key")
-                if r['data']['status'] != 'Complete':
-                    raise Exception("Failed to mark assignment complete")
-            except Exception as e:
-                # TODO: should probably do more than just log an error
-                # locally, perhaps try to send errors again? then re-try to
-                # send complete status again?
-                logging.exception(e.message)
-                return
-
-            # TODO: Clean up! Delete the local files
-
-            # We're done, delete assignment and clear errors
-            self.assigned_pr = None
-            self.errors = list()
-            return
-
-    def report_errors(self):
-        """
-        It will be called after process() if that method returned False
-        """
-        return
 
 if __name__ == "__main__":
     usage = "usage: %s start|stop|restart" % sys.argv[0]
