@@ -1,5 +1,4 @@
 import json
-import logging
 import sys
 import time
 import multiprocessing
@@ -35,9 +34,12 @@ class Worker(Daemon):
         self.devices = {}
 
         # All worker configs are stored in /etc/reflow-worker.conf
+        # Exit on any Exception. if we can't open or read the configuration,
+        # we cannot continue
+        # noinspection PyBroadException
         try:
             worker_json = json.load(open(WORKER_CONF, 'r'))
-        except Exception as e:
+        except Exception:
             logger.error(
                 "Caught exception while opening %s" % WORKER_CONF,
                 exc_info=True
@@ -46,16 +48,20 @@ class Worker(Daemon):
 
         # look for the list of CUDA devices in config file &
         # test the device numbers as valid CUDA devices
+        # Exit on any Exception. If we do not have any CUDA devices,
+        # we cannot continue
+        # noinspection PyBroadException
         try:
             cuda.init()
             for device in worker_json['devices']:
                 cuda.Device(device)
                 self.devices[device] = None  # not currently working
-        except Exception as e:
-            logger.warning("Exception: %s", e.message)
-            message = "No devices found in config file:  %s.\n"
-            logger.error(message % WORKER_CONF)
-            logger.error("Exiting since device list not found")
+        except Exception:
+            message = "Device list not found in config file:  %s"
+            logger.error(
+                message % WORKER_CONF,
+                exc_info=True
+            )
             sys.exit(1)
 
         # look for the host in config file
