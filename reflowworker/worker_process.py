@@ -3,7 +3,7 @@ import logging
 
 from reflowrestclient import utils
 
-from models.process_request import ProcessRequest
+from reflowworker.process_request import ProcessRequest
 
 
 class WorkerProcess(multiprocessing.Process):

@@ -1,5 +1,5 @@
 from sample_models import Sample
-from reflowworker.clustering_processes import hdp
+from clustering_processes import hdp
 
 import re
 import numpy as np

@@ -1,6 +1,6 @@
 import numpy as np
 
-from models.sample_models import Cluster, SampleCluster, \
+from sample_models import Cluster, SampleCluster, \
     SampleClusterParameter, SampleClusterComponent, \
     SampleClusterComponentParameter
 # NOTE: we don't import cluster here because it causes an
