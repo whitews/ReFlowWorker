@@ -9,11 +9,11 @@ import pycuda.driver as cuda
 from reflowrestclient import utils
 
 from daemon import Daemon
+from logger import logger
 from worker_process import WorkerProcess
 
 
 WORKER_CONF = '/etc/reflow_worker.conf'
-WORKER_LOG = '/var/log/reflow_worker.log'
 DEFAULT_SLEEP = 15  # in seconds
 
 
@@ -34,27 +34,14 @@ class Worker(Daemon):
         # None if the device is free
         self.devices = {}
 
-        # setup logging
-        try:
-            logging.basicConfig(
-                filename=WORKER_LOG,
-                filemode='a',
-                level=logging.DEBUG)
-        except IOError, e:
-            message = "Failed to setup logging to file: %s\n" + \
-                "Do you have permission to write to this file?"
-            sys.stderr.write(message % WORKER_LOG)
-            sys.stderr.write(e.message)
-            sys.exit(1)
-
         # All worker configs are stored in /etc/reflow-worker.conf
         try:
             worker_json = json.load(open(WORKER_CONF, 'r'))
         except Exception as e:
-            logging.error(
-                "Caught exception while opening %s" %
-                WORKER_CONF)
-            logging.exception("%s" % e.message)
+            logger.error(
+                "Caught exception while opening %s" % WORKER_CONF,
+                exc_info=True
+            )
             sys.exit(1)
 
         # look for the list of CUDA devices in config file &
@@ -65,10 +52,10 @@ class Worker(Daemon):
                 cuda.Device(device)
                 self.devices[device] = None  # not currently working
         except Exception as e:
-            logging.warning("Exception: %s", e.message)
+            logger.warning("Exception: %s", e.message)
             message = "No devices found in config file:  %s.\n"
-            logging.error(message % WORKER_CONF)
-            logging.error("Exiting since device list not found")
+            logger.error(message % WORKER_CONF)
+            logger.error("Exiting since device list not found")
             sys.exit(1)
 
         # look for the host in config file
@@ -76,8 +63,8 @@ class Worker(Daemon):
             self.host = worker_json['host']
         else:
             message = "Host not found in config file:  %s.\n"
-            logging.error(message % WORKER_CONF)
-            logging.error("Exiting since host not found")
+            logger.error(message % WORKER_CONF)
+            logger.error("Exiting since host not found")
             sys.exit(1)
 
         # look for the worker name in config file
@@ -85,8 +72,8 @@ class Worker(Daemon):
             self.name = worker_json['name']
         else:
             message = "Worker name not found in config file:  %s.\n"
-            logging.error(message % WORKER_CONF)
-            logging.error("Exiting since worker name not found")
+            logger.error(message % WORKER_CONF)
+            logger.error("Exiting since worker name not found")
             sys.exit(1)
 
         # look for the worker token in config file
@@ -95,8 +82,8 @@ class Worker(Daemon):
             self.token = worker_json['token']
         else:
             message = "Worker token not found in config file:  %s.\n"
-            logging.error(message % WORKER_CONF)
-            logging.error("Exiting since worker token not found")
+            logger.error(message % WORKER_CONF)
+            logger.error("Exiting since worker token not found")
             sys.exit(1)
 
         # look for the server protocol, http or https
@@ -119,9 +106,9 @@ class Worker(Daemon):
                 raise Exception
         except Exception, e:
             message = "Could not verify worker %s with host %s\n"
-            logging.error(message % (self.name, self.host))
-            logging.error(e.message)
-            logging.error("Exiting since worker credentials are invalid")
+            logger.error(message % (self.name, self.host))
+            logger.error(e.message)
+            logger.error("Exiting since worker credentials are invalid")
             sys.exit(1)
 
         # Put the PID file in /tmp
@@ -130,6 +117,8 @@ class Worker(Daemon):
         super(Worker, self).__init__(pid_file)
 
     def _run(self):
+        logger.info("Worker started")
+
         while True:
             # check in on our children
             working_requests = []
@@ -182,7 +171,7 @@ class Worker(Daemon):
                     )
                     available_devices.pop()
             except Exception as e:
-                logging.warning("Exception: ", e.message)
+                logger.warning("Exception: ", e.message)
                 return
 
     def launch_workers(self):
@@ -219,7 +208,7 @@ class Worker(Daemon):
                 self.devices[gpu_id] = pr['id']
 
         except Exception as e:
-            logging.warning("Exception: %s", e.message)
+            logger.warning("Exception: %s", e.message)
             return
 
 if __name__ == "__main__":
@@ -229,9 +218,10 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 2:
         if 'start' == sys.argv[1]:
-            worker.start(debug=True)
+            worker.start(debug=False)
         elif 'stop' == sys.argv[1]:
             worker.stop()
+            logger.info("Worker stopped")
         elif 'restart' == sys.argv[1]:
             worker.restart()
         else:

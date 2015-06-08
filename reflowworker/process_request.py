@@ -1,5 +1,6 @@
 from sample_models import Sample
 from clustering_processes import hdp
+from logger import logger
 
 import re
 import numpy as np
@@ -58,6 +59,8 @@ class ProcessRequest(object):
             sample_collection_pk=self.sample_collection_id,
             method=self.method
         )
+
+        logger.info("GET SampleCollection succeeded")
 
         # populate self.samples w/Sample instances w/compensation
         for member in response['data']['members']:
