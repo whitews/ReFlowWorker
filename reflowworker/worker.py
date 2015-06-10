@@ -57,9 +57,8 @@ class Worker(Daemon):
                 cuda.Device(device)
                 self.devices[device] = None  # not currently working
         except Exception:
-            message = "Device list not found in config file:  %s"
             logger.error(
-                message % WORKER_CONF,
+                "Device list not found in config file:  %s" % WORKER_CONF,
                 exc_info=True
             )
             sys.exit(1)
