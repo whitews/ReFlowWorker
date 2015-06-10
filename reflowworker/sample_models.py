@@ -305,13 +305,15 @@ class Cluster(object):
             method=method
         )
 
-        if 'status' not in response:
-            return False
-        if response['status'] == 201:
-            self.reflow_pk = response['data']['id']
-            return True
-
-        return False
+        try:
+            if response['status'] == 201:
+                self.reflow_pk = response['data']['id']
+            else:
+                raise ValueError(
+                    "POST failed: cluster index %s" % str(self.index)
+                )
+        except Exception as e:
+            raise e
 
 
 class SampleCluster(object):
@@ -366,12 +368,15 @@ class SampleCluster(object):
             method=method
         )
 
-        if 'status' not in response:
-            return False
-        if response['status'] == 201:
-            return True
-
-        return False
+        try:
+            if response['status'] != 201:
+                raise ValueError(
+                    "POST failed: received %s status" % str(
+                        response['status']
+                    )
+                )
+        except Exception as e:
+            raise e
 
 
 class SampleClusterParameter(object):

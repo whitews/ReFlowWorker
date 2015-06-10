@@ -360,23 +360,32 @@ class ProcessRequest(object):
         for c in self.clusters:
             # POST only if it has no PK
             if not c.reflow_pk:
-
-                # after trying to POST, if no PK we return False
-                if not c.post(
+                try:
+                    c.post(
                         self.host,
                         self.token,
                         self.method,
                         self.process_request_id
-                ):
+                    )
+                except Exception as e:
+                    logger.error(str(e), exc_info=True)
                     raise ValueError(
-                        "POST cluster failed for PR:%s" %
+                        "Cluster POST failed for PR:%s" %
                         self.process_request_id
                     )
 
             # now save all the sample clusters
             for sc in c.sample_clusters:
-                if not sc.post(self.host, self.token, self.method, c.reflow_pk):
+                try:
+                    sc.post(
+                        self.host,
+                        self.token,
+                        self.method,
+                        c.reflow_pk
+                    )
+                except Exception as e:
+                    logger.error(str(e), exc_info=True)
                     raise ValueError(
-                        "POST cluster failed for PR:%s" %
+                        "SampleCluster POST failed for PR:%s" %
                         self.process_request_id
                     )
