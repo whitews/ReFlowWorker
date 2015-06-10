@@ -1,5 +1,5 @@
 import multiprocessing
-import logging
+from logger import logger
 
 from reflowrestclient import utils
 
@@ -21,6 +21,9 @@ class WorkerProcess(multiprocessing.Process):
             assigned_pr_id,
             method=self.method
         )
+
+        logger.info("Starting ProcessRequest %s" % str(assigned_pr_id))
+
         self.assigned_pr = ProcessRequest(
             self.host,
             self.token,
@@ -33,7 +36,7 @@ class WorkerProcess(multiprocessing.Process):
         try:
             self.assigned_pr.analyze(self.device)
         except Exception, e:
-            logging.exception(e.message)
+            logger.error(str(e))
             self.report_errors()
             return
 
@@ -49,14 +52,14 @@ class WorkerProcess(multiprocessing.Process):
                 # we're not assigned anymore, return
                 return
         except Exception as e:
-            logging.exception(e.message)
+            logger.error(str(e))
             return
 
         # Upload results
         try:
             self.assigned_pr.post_clusters()
         except Exception as e:
-            logging.exception(e.message)
+            logger.error(str(e))
             return
 
         # Report the ProcessRequest is complete
@@ -71,7 +74,7 @@ class WorkerProcess(multiprocessing.Process):
                 # something went wrong
                 raise Exception("Server rejected our 'Complete' request")
         except Exception as e:
-            logging.exception(e.message)
+            logger.error(str(e))
             return
 
         # Verify 'Complete' status
@@ -92,7 +95,7 @@ class WorkerProcess(multiprocessing.Process):
             # TODO: should probably do more than just log an error
             # locally, perhaps try to send errors again? then re-try to
             # send complete status again?
-            logging.exception(e.message)
+            logger.error(str(e))
             return
 
         # TODO: Clean up! Delete the local files
