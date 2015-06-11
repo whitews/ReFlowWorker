@@ -401,29 +401,6 @@ class SampleClusterComponent(object):
         self.covariance = covariance
         self.parameters = parameters
 
-    def post(self, host, token, method, sample_cluster_id):
-        param_dict = dict()
-
-        for p in self.parameters:
-            param_dict[p.channel] = p.location
-
-        response = utils.post_sample_cluster_component(
-            host,
-            token,
-            sample_cluster_id,
-            self.weight,
-            self.covariance,
-            param_dict,
-            method=method
-        )
-
-        if 'status' not in response:
-            return False
-        if response['status'] == 201:
-            return True
-
-        return False
-
 
 class SampleClusterComponentParameter(object):
     """
