@@ -98,9 +98,11 @@ def hdp(process_request, device):
                 )
                 event_map[event_class] = [header_row]  # a list of lists
 
-            # grab event from transformed data, and add to map
-            event_row = list(x_data[j])
-            event_row.insert(0, sample.subsample_indices[j])
+            # grab event from transformed data, and add to map.
+            # Make sure to convert any numpy-ish stuff to int and float,
+            # else we risk errors when encoding to JSON later
+            event_row = x_data[j].tolist()
+            event_row.insert(0, int(sample.subsample_indices[j]))
             event_map[event_class].append(event_row)
 
         # now we have all the events for this sample classified and organized

@@ -396,7 +396,8 @@ class SampleClusterComponent(object):
     for re-classification of events in 2nd stage processing
     """
     def __init__(self, index, weight, covariance, parameters):
-        self.index = index
+        # index might be a numpy int that doesn't always play nice with JSON
+        self.index = int(index)
         self.weight = weight
         self.covariance = covariance
         self.parameters = parameters
