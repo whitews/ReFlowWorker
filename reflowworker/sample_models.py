@@ -77,7 +77,7 @@ class Sample(object):
 
     def download_fcs(self, token, download_dir):
         """
-        ReFlow Worker sample downloads are kept in BASE_DIR
+        ReFlow Worker sample downloads are kept in CACHE_DIR
         organized by host, then sample id
 
         Returns True if download succeeded or file is already present
