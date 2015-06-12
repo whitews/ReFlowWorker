@@ -212,8 +212,11 @@ class Worker(Daemon):
                 process.start()
                 self.devices[gpu_id] = pr['id']
 
-        except Exception as e:
-            logger.warning("Exception: %s", e.message)
+        except Exception:
+            logger.error(
+                    "Error trying to launch worker processes",
+                    exc_info=True
+                )
             return
 
 if __name__ == "__main__":
