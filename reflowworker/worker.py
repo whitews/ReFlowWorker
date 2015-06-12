@@ -7,13 +7,10 @@ import pycuda.driver as cuda
 
 from reflowrestclient import utils
 
+from settings import WORKER_CONF, DEFAULT_SLEEP
 from daemon import Daemon
 from logger import logger
 from worker_process import WorkerProcess
-
-
-WORKER_CONF = '/etc/reflow_worker.conf'
-DEFAULT_SLEEP = 15  # in seconds
 
 
 class Worker(Daemon):

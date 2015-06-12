@@ -1,3 +1,4 @@
+from settings import CACHE_DIR
 from sample_models import Sample
 from clustering_processes import hdp
 from logger import logger
@@ -5,8 +6,6 @@ from logger import logger
 import re
 import numpy as np
 from reflowrestclient import utils
-
-CACHE_DIR = '/var/tmp/ReFlow-data/'
 
 
 class ProcessRequest(object):

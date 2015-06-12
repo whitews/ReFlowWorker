@@ -2,8 +2,7 @@ import sys
 import logging
 from logging.handlers import RotatingFileHandler
 
-WORKER_LOG = '/var/log/reflow_worker.log'
-LOG_FORMAT = '%(levelname)s: %(asctime)-15s %(name)s: %(message)s'
+from settings import WORKER_LOG, LOG_FORMAT
 
 # setup logging
 try:
@@ -21,5 +20,4 @@ except (OSError, IOError) as e:
     message = "\nFailed to initialize log file: %s\n" + \
         "Do you have permission to write to this file?\n\n"
     sys.stderr.write(message % WORKER_LOG)
-    sys.stderr.write(str(e) + "\n")
-    sys.exit(1)
+    sys.exit(str(e) + "\n")
