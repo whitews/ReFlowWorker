@@ -22,7 +22,11 @@ class WorkerProcess(multiprocessing.Process):
             method=self.method
         )
 
-        logger.info("Starting ProcessRequest %s" % str(assigned_pr_id))
+        logger.info(
+            "Starting ProcessRequest %s on GPU %d",
+            str(assigned_pr_id),
+            self.device
+        )
 
         self.assigned_pr = ProcessRequest(
             self.host,
