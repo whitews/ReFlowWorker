@@ -41,10 +41,11 @@ class Worker(Daemon):
             worker_json = json.load(open(WORKER_CONF, 'r'))
         except Exception:
             logger.error(
-                "Caught exception while opening %s" % WORKER_CONF,
+                "Caught exception while opening %s",
+                WORKER_CONF,
                 exc_info=True
             )
-            sys.exit(1)
+            sys.exit("Worker failed to start, see log file for details")
 
         # look for the list of CUDA devices in config file &
         # test the device numbers as valid CUDA devices
@@ -58,10 +59,11 @@ class Worker(Daemon):
                 self.devices[device] = None  # not currently working
         except Exception:
             logger.error(
-                "Device list not found in config file:  %s" % WORKER_CONF,
+                "Device list not found in config file:  %s",
+                WORKER_CONF,
                 exc_info=True
             )
-            sys.exit(1)
+            sys.exit("Worker failed to start, see log file for details")
 
         # look for the host in config file
         if 'host' in worker_json:
@@ -70,7 +72,7 @@ class Worker(Daemon):
             message = "Host not found in config file:  %s.\n"
             logger.error(message % WORKER_CONF)
             logger.error("Exiting since host not found")
-            sys.exit(1)
+            sys.exit("Worker failed to start, see log file for details")
 
         # look for the worker name in config file
         if 'name' in worker_json:
@@ -79,7 +81,7 @@ class Worker(Daemon):
             message = "Worker name not found in config file:  %s.\n"
             logger.error(message % WORKER_CONF)
             logger.error("Exiting since worker name not found")
-            sys.exit(1)
+            sys.exit("Worker failed to start, see log file for details")
 
         # look for the worker token in config file
         # the token is the Worker's identifier to the host (i.e. password)
@@ -89,7 +91,7 @@ class Worker(Daemon):
             message = "Worker token not found in config file:  %s.\n"
             logger.error(message % WORKER_CONF)
             logger.error("Exiting since worker token not found")
-            sys.exit(1)
+            sys.exit("Worker failed to start, see log file for details")
 
         # look for the server protocol, http or https
         if 'method' in worker_json:
@@ -114,7 +116,7 @@ class Worker(Daemon):
             logger.error(message % (self.name, self.host))
             logger.error(e.message)
             logger.error("Exiting since worker credentials are invalid")
-            sys.exit(1)
+            sys.exit("Worker failed to start, see log file for details")
 
         # Put the PID file in /tmp
         pid_file = '/tmp/reflow-worker-%s.pid' % self.name
