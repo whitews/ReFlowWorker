@@ -168,6 +168,10 @@ class Worker(Daemon):
                         return
 
                     # request ProcessRequest assignment
+                    logger.info(
+                        "Requesting assignment of PR %s",
+                        str(request["id"])
+                    )
                     utils.request_pr_assignment(
                         self.host,
                         self.token,
@@ -175,8 +179,11 @@ class Worker(Daemon):
                         method=self.method
                     )
                     available_devices.pop()
-            except Exception as e:
-                logger.warning("Exception: ", e.message)
+            except Exception:
+                logger.error(
+                    "Error trying to request assignments",
+                    exc_info=True
+                )
                 return
 
     def launch_workers(self):
@@ -223,7 +230,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 2:
         if 'start' == sys.argv[1]:
-            worker.start(debug=False)
+            worker.start(debug=True)
         elif 'stop' == sys.argv[1]:
             worker.stop()
             logger.info("Worker stopped")
