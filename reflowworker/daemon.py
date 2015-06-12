@@ -34,9 +34,7 @@ class Daemon(object):
                 # exit first parent
                 sys.exit(0)
         except OSError, e:
-            sys.stderr.write(
-                "Fork #1 failed: %d (%s)\n" % (e.errno, e.strerror))
-            sys.exit(1)
+            sys.exit("Fork #1 failed: %d (%s)\n" % (e.errno, e.strerror))
 
         # decouple from parent environment
         os.chdir("/")
@@ -50,9 +48,7 @@ class Daemon(object):
                 # exit from second parent
                 sys.exit(0)
         except OSError, e:
-            sys.stderr.write(
-                "Fork #2 failed: %d (%s)\n" % (e.errno, e.strerror))
-            sys.exit(1)
+            sys.exit("Fork #2 failed: %d (%s)\n" % (e.errno, e.strerror))
 
         # redirect standard file descriptors
         sys.stdout.flush()
@@ -85,9 +81,10 @@ class Daemon(object):
             pid = None
 
         if pid:
-            message = "PID file %s already exist. Daemon already running?\n"
-            sys.stderr.write(message % self.__pid_file)
-            sys.exit(1)
+            sys.exit(
+                "PID file %s already exists. Daemon already running?\n" %
+                self.__pid_file
+            )
 
         # Start the daemon
         if not debug:
@@ -104,12 +101,10 @@ class Daemon(object):
             pid = int(pf.read().strip())
             pf.close()
         except IOError:
-            pid = None
-
-        if not pid:
-            message = "PID file %s does not exist. Daemon not running?\n"
-            sys.stderr.write(message % self.__pid_file)
-            sys.exit(1)
+            sys.exit(
+                "PID file %s does not exist. Daemon not running?\n" %
+                self.__pid_file
+            )
 
         # Try killing the daemon process
         try:
@@ -124,8 +119,7 @@ class Daemon(object):
                 if os.path.exists(self.__pid_file):
                     os.remove(self.__pid_file)
             else:
-                print str(err)
-                sys.exit(1)
+                sys.exit(err)
 
     def restart(self):
         """
