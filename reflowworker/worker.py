@@ -65,32 +65,17 @@ class Worker(Daemon):
             )
             sys.exit("Worker failed to start, see log file for details")
 
-        # look for the host in config file
-        if 'host' in worker_json:
+        # look for the host & worker name in config file
+        try:
             self.host = worker_json['host']
-        else:
-            message = "Host not found in config file:  %s.\n"
-            logger.error(message % WORKER_CONF)
-            logger.error("Exiting since host not found")
-            sys.exit("Worker failed to start, see log file for details")
-
-        # look for the worker name in config file
-        if 'name' in worker_json:
             self.name = worker_json['name']
-        else:
-            message = "Worker name not found in config file:  %s.\n"
-            logger.error(message % WORKER_CONF)
-            logger.error("Exiting since worker name not found")
-            sys.exit("Worker failed to start, see log file for details")
-
-        # look for the worker token in config file
-        # the token is the Worker's identifier to the host (i.e. password)
-        if 'token' in worker_json:
             self.token = worker_json['token']
-        else:
-            message = "Worker token not found in config file:  %s.\n"
-            logger.error(message % WORKER_CONF)
-            logger.error("Exiting since worker token not found")
+        except Exception:
+            logger.error(
+                "Errors in config file:  %s",
+                 WORKER_CONF,
+                exc_info=True
+            )
             sys.exit("Worker failed to start, see log file for details")
 
         # look for the server protocol, http or https
@@ -109,13 +94,16 @@ class Worker(Daemon):
                 self.token,
                 method=self.method
             )
-            if result['data']['worker'] is not True:
-                raise Exception
-        except Exception, e:
+            is_valid = result['data']['worker']
+            assert is_valid  # value should be True
+        except Exception:
             message = "Could not verify worker %s with host %s\n"
-            logger.error(message % (self.name, self.host))
-            logger.error(e.message)
-            logger.error("Exiting since worker credentials are invalid")
+            logger.error(
+                "Could not verify worker '%s' with host '%s'",
+                self.name,
+                self.host,
+                exc_info=True
+            )
             sys.exit("Worker failed to start, see log file for details")
 
         # Put the PID file in /tmp
