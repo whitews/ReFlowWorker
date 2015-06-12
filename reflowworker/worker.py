@@ -128,9 +128,12 @@ class Worker(Daemon):
                 if self.devices[gpu_id] not in working_requests:
                     self.devices[gpu_id] = None
 
-            print self.devices
             if len(working_requests) < len(self.devices):
+                # launch workers first in case the server already has
+                # work assigned to this worker
                 self.launch_workers()
+
+                # request assignements for any free GPU devices
                 self.request_assignments()
 
             time.sleep(DEFAULT_SLEEP)
