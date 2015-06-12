@@ -60,7 +60,11 @@ class ProcessRequest(object):
             method=self.method
         )
 
-        logger.info("GET SampleCollection succeeded")
+        logger.info(
+            "(PR: %s) GET SampleCollection %s succeeded",
+            str(self.process_request_id),
+            str(self.sample_collection_id)
+        )
 
         # populate self.samples w/Sample instances w/compensation
         for member in response['data']['members']:
