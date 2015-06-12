@@ -6,7 +6,7 @@ import re
 import numpy as np
 from reflowrestclient import utils
 
-BASE_DIR = '/var/tmp/ReFlow-data/'
+CACHE_DIR = '/var/tmp/ReFlow-data/'
 
 
 class ProcessRequest(object):
@@ -31,7 +31,7 @@ class ProcessRequest(object):
         self.sample_collection_id = pr_dict['sample_collection']
         self.subsample_count = pr_dict['subsample_count']
         self.directory = "%s%s/process_requests/%s" % (
-            BASE_DIR,
+            CACHE_DIR,
             self.host,
             self.process_request_id)
         self.inputs = pr_dict['inputs']
@@ -203,7 +203,7 @@ class ProcessRequest(object):
         return True
 
     def _download_samples(self):
-        download_dir = BASE_DIR + str(self.host) + '/'
+        download_dir = CACHE_DIR + str(self.host) + '/'
         for s in self.samples:
             s.download_fcs(self.token, download_dir)
 
