@@ -1,5 +1,6 @@
 import multiprocessing
 from logger import logger
+from processing_error import ProcessingError
 
 from reflowrestclient import utils
 
@@ -15,33 +16,52 @@ class WorkerProcess(multiprocessing.Process):
         self.method = method
         self.device = gpu_id
 
-        pr_response = utils.get_process_request(
-            self.host,
-            self.token,
-            assigned_pr_id,
-            method=self.method
-        )
-
         logger.info(
             "Starting ProcessRequest %s on GPU %d",
             str(assigned_pr_id),
             self.device
         )
 
-        self.assigned_pr = ProcessRequest(
-            self.host,
-            self.token,
-            pr_response['data'],
-            self.method
-        )
- 
+        try:
+            pr_response = utils.get_process_request(
+                self.host,
+                self.token,
+                assigned_pr_id,
+                method=self.method
+            )
+
+            self.assigned_pr = ProcessRequest(
+                self.host,
+                self.token,
+                pr_response['data'],
+                self.method
+            )
+        except ProcessingError as e:
+            # any ProcessingError should have already been logged,
+            # so just report it back to the ReFlow server.
+            # Also, re-raise a ProcessingError so the Worker can avoid
+            # running this analysis
+            self.report_errors(e.message)
+            raise ProcessingError("Fatal error creating WorkerProcess")
+        except Exception, e:
+            logger.error(str(e))
+            self.report_errors(
+                "Unknown error occurred parsing ProcessRequest from server"
+            )
+            raise ProcessingError("Fatal error creating WorkerProcess")
+
     def run(self):
         # We've got something to do!
         try:
             self.assigned_pr.analyze(self.device)
-        except Exception, e:
+        except ProcessingError as e:
+            # any ProcessingError should have already been logged,
+            # so just report it back to the ReFlow server
+            self.report_errors(e.message)
+            return
+        except Exception as e:
             logger.error(str(e))
-            self.report_errors()
+            self.report_errors("Unknown error occurred during processing")
             return
 
         # Verify assignment
@@ -53,17 +73,29 @@ class WorkerProcess(multiprocessing.Process):
                 method=self.method
             )
             if not verify_assignment_response['data']['assignment']:
-                # we're not assigned anymore, return
+                # we're not assigned anymore, no need to report errors
+                # just return
                 return
         except Exception as e:
             logger.error(str(e))
+            self.report_errors(
+                "Unknown error occurred verifying assignment after processing"
+            )
             return
 
         # Upload results
         try:
             self.assigned_pr.post_clusters()
-        except Exception as e:
+        except ProcessingError as e:
+            # any ProcessingError should have already been logged,
+            # so just report it back to the ReFlow server
+            self.report_errors(e.message)
+            return
+        except Exception, e:
             logger.error(str(e))
+            self.report_errors(
+                "Unknown error occurred saving cluster results to server"
+            )
             return
 
         # Report the ProcessRequest is complete
@@ -74,37 +106,20 @@ class WorkerProcess(multiprocessing.Process):
                 self.assigned_pr.process_request_id,
                 method=self.method
             )
-            if verify_complete_response['status'] != 200:
-                # something went wrong
-                raise Exception("Server rejected our 'Complete' request")
         except Exception as e:
+            # This would be an odd scenario! If the PR was legitimately
+            # assigned to this worker and the server was still running,
+            # then there's not much we can do. We will still attempt to
+            # report an error, but it's doubtful that will work either.
             logger.error(str(e))
-            return
-
-        # Verify 'Complete' status
-        try:
-            r = utils.get_process_request(
-                self.host,
-                self.token,
-                self.assigned_pr.process_request_id,
-                method=self.method
+            self.report_errors(
+                "Unknown error occurred attempting to mark request 'Complete'"
             )
-            if 'data' not in r:
-                raise Exception("Improper host response, no 'data' key")
-            if 'status' not in r['data']:
-                raise Exception("Improper host response, no 'status' key")
-            if r['data']['status'] != 'Complete':
-                raise Exception("Failed to mark assignment complete")
-        except Exception as e:
-            # TODO: should probably do more than just log an error
-            # locally, perhaps try to send errors again? then re-try to
-            # send complete status again?
-            logger.error(str(e))
             return
 
         # TODO: Clean up! Delete the local files
 
-    def report_errors(self):
+    def report_errors(self, message):
         """
         It will be called after process() if that method returned False
         """
