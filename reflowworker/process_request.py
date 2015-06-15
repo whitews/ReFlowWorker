@@ -1,7 +1,12 @@
 from settings import CACHE_DIR
 from sample_models import Sample
 from clustering_processes import hdp
+
+# NOTE: We import logger here for logging info and for more granular
+#       errors useful for troubleshooting. All exceptions should be caught
+#       and reported to the ReFlow server by the WorkerProcess.
 from logger import logger
+from processing_error import ProcessingError
 
 import re
 import numpy as np
@@ -11,7 +16,15 @@ from reflowrestclient import utils
 class ProcessRequest(object):
     """
     A process request from a ReFlow server.
-    Contains the list of Samples and a list of process input key/values
+    Stores the list of Sample instances and  process input key/values, along
+    with panel mapping information. Nearly all the data munging and
+    processing logic occurs within ProcessRequest, except for the
+    implementation of the clustering algorithm itself.
+
+    NOTE: ProcessRequest tries to log useful information for monitoring and
+          troubleshooting. Any errors are logged as-is, but a more useful
+          ProcessingError is re-raised so the WorkerProcess can report them
+          back to the ReFlow server.
     """
     def __init__(self, host, token, pr_dict, method):
         self.host = host
@@ -67,20 +80,35 @@ class ProcessRequest(object):
 
         # populate self.samples w/Sample instances w/compensation
         for member in response['data']['members']:
-            compensation = self.convert_matrix(member['compensation'])
-            sample = Sample(self, member['sample'], compensation)
+            try:
+                compensation = self.convert_matrix(member['compensation'])
+            except Exception as e:
+                logger.error(str(e), exc_info=True)
+                raise ProcessingError("Error parsing compensation")
+            try:
+                sample = Sample(self, member['sample'], compensation)
+            except Exception as e:
+                logger.error(str(e), exc_info=True)
+                raise ProcessingError("Error retrieving samples")
 
             self.samples.append(sample)
             if sample.site_panel_id not in self.panels:
-                panel_response = utils.get_site_panel(
-                    self.host,
-                    self.token,
-                    sample.site_panel_id,
-                    method=self.method
-                )
-                if 'data' not in response:
-                    continue
+                try:
+                    panel_response = utils.get_site_panel(
+                        self.host,
+                        self.token,
+                        sample.site_panel_id,
+                        method=self.method
+                    )
+                except Exception as e:
+                    logger.error(str(e), exc_info=True)
+                    raise ProcessingError("Error retrieving sample annotation")
                 self.panels[sample.site_panel_id] = panel_response['data']
+
+        logger.info(
+            "(PR: %s) All Sample instances were created successfully",
+            str(self.process_request_id)
+        )
 
     @staticmethod
     def convert_matrix(compensation_string):
@@ -131,13 +159,10 @@ class ProcessRequest(object):
             # clustering category is required, but missing
             return False
 
-        try:
-            self.random_seed = int(self.clustering_options['random_seed'])
-        except:
-            return False
+        self.random_seed = int(self.clustering_options['random_seed'])
 
         if not self.transformation:
-            self.transformation = 'asinh'  # default xform is asinh
+            self.transformation = 'asinh'  # default transform is asinh
 
         # Finally, we need to generate the panel maps used for "normalizing"
         # the samples
@@ -332,26 +357,34 @@ class ProcessRequest(object):
     def analyze(self, device):
         # First, validate the inputs
         if not self._validate_inputs():
-            raise ValueError("Invalid process request inputs")
+            raise ProcessingError("Invalid process request inputs")
 
         # Seed the RNG
         np.random.seed(self.random_seed)
 
         # Download the samples
-        self._download_samples()
+        try:
+            self._download_samples()
+        except Exception as e:
+            logger.error(str(e), exc_info=True)
+            raise ProcessingError("Downloading samples failed")
 
         # Pre-process data...takes care of various combinations of tasks
         # Afterward, all samples' subsampled data files will be available &
         # ready for analysis
         if not self._pre_process():
-            raise ValueError("Error occurred during pre-processing")
+            raise ProcessingError("Error occurred during pre-processing")
 
         # next is clustering
         if self.clustering == 'hdp':
-            self.clusters = hdp(self, device)
+            try:
+                self.clusters = hdp(self, device)
+            except Exception as e:
+                logger.error(str(e), exc_info=True)
+                raise ProcessingError("HDP clustering failed")
         else:
             # only HDP is implemented at this time
-            raise ValueError("Unsupported clustering type")
+            raise ProcessingError("Unsupported clustering type")
 
     def post_clusters(self):
         """
@@ -372,10 +405,7 @@ class ProcessRequest(object):
                     )
                 except Exception as e:
                     logger.error(str(e), exc_info=True)
-                    raise ValueError(
-                        "Cluster POST failed for PR:%s" %
-                        self.process_request_id
-                    )
+                    raise ProcessingError("Cluster POST failed")
 
             # now save all the sample clusters
             for sc in c.sample_clusters:
@@ -388,7 +418,4 @@ class ProcessRequest(object):
                     )
                 except Exception as e:
                     logger.error(str(e), exc_info=True)
-                    raise ValueError(
-                        "SampleCluster POST failed for PR:%s" %
-                        self.process_request_id
-                    )
+                    raise ProcessingError("SampleCluster POST failed")
