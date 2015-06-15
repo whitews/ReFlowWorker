@@ -6,4 +6,5 @@ class ProcessingError(Exception):
     given.
     """
     def __init__(self, message):
+        self.message = message
         super(ProcessingError, self).__init__(message)
