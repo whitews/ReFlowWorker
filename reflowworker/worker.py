@@ -185,20 +185,27 @@ class Worker(Daemon):
                 self.token,
                 method=self.method
             )
+        except Exception as e:
+            logger.error(
+                str(e),
+                exc_info=True
+            )
+            return
 
-            # iterate through assigned PRs
-            for pr in query_assignment_response['data']:
-                # check if the PR is already being worked on
-                if pr['id'] in self.devices.values():
-                    continue
+        # iterate through assigned PRs
+        for pr in query_assignment_response['data']:
+            # check if the PR is already being worked on
+            if pr['id'] in self.devices.values():
+                continue
 
-                # see if we have an available device
-                available_devices = self.get_available_devices()
+            # see if we have an available device
+            available_devices = self.get_available_devices()
 
-                if len(available_devices) <= 0:
-                    return
+            if len(available_devices) <= 0:
+                return
 
-                gpu_id = available_devices.pop(0)
+            gpu_id = available_devices.pop(0)
+            try:
                 process = WorkerProcess(
                     self.host,
                     self.token,
@@ -206,15 +213,22 @@ class Worker(Daemon):
                     pr['id'],
                     gpu_id
                 )
+            except Exception as e:
+                logger.error(
+                    str(e),
+                    exc_info=True
+                )
+                # just skip this WorkerProcess
+                continue
+
+            try:
                 process.start()
                 self.devices[gpu_id] = pr['id']
-
-        except Exception:
-            logger.error(
-                "Error trying to launch worker processes",
-                exc_info=True
-            )
-            return
+            except Exception as e:
+                logger.error(
+                    str(e),
+                    exc_info=True
+                )
 
 if __name__ == "__main__":
     usage = "usage: %s start|stop|restart" % sys.argv[0]
