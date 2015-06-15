@@ -6,6 +6,10 @@ import numpy as np
 import flowio
 import flowutils
 
+# NOTE: Don't attempt to log or catch exceptions here, ProcessRequest will
+#       handle any exceptions thrown. Exceptions will be raised in cases
+#       where processing should not continue.
+
 
 class Sample(object):
     """
@@ -77,15 +81,10 @@ class Sample(object):
 
     def download_fcs(self, token, download_dir):
         """
+        Updates self.fcs_path with location of downloaded FCS file.
         ReFlow Worker sample downloads are kept in CACHE_DIR
         organized by host, then sample id
-
-        Returns True if download succeeded or file is already present
-        Also updates self.fcs_path
         """
-        if not self.host or not self.sample_id:
-            return False
-
         if not os.path.exists(download_dir):
             os.makedirs(download_dir)
         fcs_path = download_dir + str(self.sample_id) + '.fcs'
@@ -93,26 +92,20 @@ class Sample(object):
         # TODO: if FCS file exists validate its identity using sha1 hash
 
         if not os.path.exists(fcs_path):
-            try:
-                utils.download_sample(
-                    self.host,
-                    token,
-                    sample_pk=self.sample_id,
-                    data_format='fcs',
-                    directory=download_dir,
-                    method=self.process_request.method
-                )
-            except Exception, e:
-                print e
-                return False
+            utils.download_sample(
+                self.host,
+                token,
+                sample_pk=self.sample_id,
+                data_format='fcs',
+                directory=download_dir,
+                method=self.process_request.method
+            )
 
         self.fcs_path = fcs_path
 
         # open fcs file to save event count
         flow_obj = flowio.FlowData(self.fcs_path)
         self.event_count = flow_obj.event_count
-
-        return True
 
     def get_all_events(self):
         """
@@ -305,15 +298,12 @@ class Cluster(object):
             method=method
         )
 
-        try:
-            if response['status'] == 201:
-                self.reflow_pk = response['data']['id']
-            else:
-                raise ValueError(
-                    "POST failed: cluster index %s" % str(self.index)
-                )
-        except Exception as e:
-            raise e
+        if response['status'] == 201:
+            self.reflow_pk = response['data']['id']
+        else:
+            raise ValueError(
+                "POST failed: cluster index %s" % str(self.index)
+            )
 
 
 class SampleCluster(object):
@@ -368,15 +358,12 @@ class SampleCluster(object):
             method=method
         )
 
-        try:
-            if response['status'] != 201:
-                raise ValueError(
-                    "POST failed: received %s status" % str(
-                        response['status']
-                    )
+        if response['status'] != 201:
+            raise ValueError(
+                "POST failed: received %s status" % str(
+                    response['status']
                 )
-        except Exception as e:
-            raise e
+            )
 
 
 class SampleClusterParameter(object):
