@@ -211,9 +211,9 @@ class Worker(Daemon):
 
         except Exception:
             logger.error(
-                    "Error trying to launch worker processes",
-                    exc_info=True
-                )
+                "Error trying to launch worker processes",
+                exc_info=True
+            )
             return
 
 if __name__ == "__main__":
