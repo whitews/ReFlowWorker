@@ -196,7 +196,7 @@ class Worker(Daemon):
                 available_devices = self.get_available_devices()
 
                 if len(available_devices) <= 0:
-                        return
+                    return
 
                 gpu_id = available_devices.pop(0)
                 process = WorkerProcess(
