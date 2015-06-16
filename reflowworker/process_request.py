@@ -81,7 +81,7 @@ class ProcessRequest(object):
         # populate self.samples w/Sample instances w/compensation
         for member in response['data']['members']:
             try:
-                compensation = self.convert_matrix(member['compensation'])
+                compensation = self._convert_matrix(member['compensation'])
             except Exception as e:
                 logger.error(str(e), exc_info=True)
                 raise ProcessingError("Error parsing compensation")
@@ -111,7 +111,7 @@ class ProcessRequest(object):
         )
 
     @staticmethod
-    def convert_matrix(compensation_string):
+    def _convert_matrix(compensation_string):
         """
         Converts the comma delimited text string returned from
         ReFlow to a numpy array that the Sample
