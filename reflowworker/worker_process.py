@@ -17,7 +17,7 @@ class WorkerProcess(multiprocessing.Process):
         self.device = gpu_id
 
         logger.info(
-            "Starting ProcessRequest %s on GPU %d",
+            "ProcessRequest %s assigned to GPU %d",
             str(assigned_pr_id),
             self.device
         )
@@ -117,11 +117,26 @@ class WorkerProcess(multiprocessing.Process):
             )
             return
 
+        logger.info(
+            "(PR: %s) ProcessRequest marked as complete",
+            str(self.assigned_pr.process_request_id)
+        )
+
         # TODO: Clean up! Delete the local files
 
     def report_errors(self, message):
         """
-        It will be called after process() if that method returned False
+        Report an error back to the ReFlow server. This will update the
+        PR status to 'Error' and the PR will no longer be viable.
         """
-        print self, message
-        return
+        try:
+            utils.report_pr_error(
+                self.host,
+                self.token,
+                self.assigned_pr.process_request_id,
+                message,
+                method=self.method
+            )
+        except Exception as e:
+            # Not much we can do except log the error locally to trouble-shoot
+            logger.error(str(e))
