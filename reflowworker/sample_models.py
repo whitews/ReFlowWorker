@@ -1,5 +1,6 @@
 import os
 from cStringIO import StringIO
+import hashlib
 
 from reflowrestclient import utils
 import numpy as np
@@ -79,6 +80,16 @@ class Sample(object):
 
         self.site_panel_id = sample_dict['site_panel']
 
+    def _validate_sample_hash(self, file_path):
+        sample_file = open(file_path)
+        sha1_hash = hashlib.sha1(sample_file.read())
+        sample_file.close()
+
+        if sha1_hash.hexdigest() == self.sha1:
+            return True
+
+        return False
+
     def download_fcs(self, token, download_dir):
         """
         Updates self.fcs_path with location of downloaded FCS file.
@@ -89,9 +100,16 @@ class Sample(object):
             os.makedirs(download_dir)
         fcs_path = download_dir + str(self.sample_id) + '.fcs'
 
-        # TODO: if FCS file exists validate its identity using sha1 hash
+        # Validate sample's identity via SHA1 hash
+        if os.path.exists(fcs_path):
+            is_valid = self._validate_sample_hash(fcs_path)
+        else:
+            is_valid = False
 
-        if not os.path.exists(fcs_path):
+        if not is_valid:
+            # Either the file wasn't cached or it failed SHA1 validation.
+            # If the file was invalid, try downloading again and re-run
+            # validation check
             utils.download_sample(
                 self.host,
                 token,
@@ -100,6 +118,11 @@ class Sample(object):
                 directory=download_dir,
                 method=self.process_request.method
             )
+
+            if not self._validate_sample_hash(fcs_path):
+                raise ValueError(
+                    "Sample PK %s failed to validate using SHA1"
+                )
 
         self.fcs_path = fcs_path
 
