@@ -381,11 +381,21 @@ class ProcessRequest(object):
             logger.error(str(e), exc_info=True)
             raise ProcessingError("Downloading samples failed")
 
+        logger.info(
+            "(PR: %s) All samples downloaded & validated",
+            str(self.process_request_id)
+        )
+
         # Pre-process data...takes care of various combinations of tasks
         # Afterward, all samples' subsampled data files will be available &
         # ready for analysis
         if not self._pre_process():
             raise ProcessingError("Error occurred during pre-processing")
+
+        logger.info(
+            "(PR: %s) Pre-processing succeeded",
+            str(self.process_request_id)
+        )
 
         # next is clustering
         if self.clustering == 'hdp':
@@ -397,6 +407,11 @@ class ProcessRequest(object):
         else:
             # only HDP is implemented at this time
             raise ProcessingError("Unsupported clustering type")
+
+        logger.info(
+            "(PR: %s) Clustering process succeeded",
+            str(self.process_request_id)
+        )
 
     def post_clusters(self):
         """
@@ -431,3 +446,8 @@ class ProcessRequest(object):
                 except Exception as e:
                     logger.error(str(e), exc_info=True)
                     raise ProcessingError("SampleCluster POST failed")
+
+        logger.info(
+            "(PR: %s) POST of cluster results succeeded",
+            str(self.process_request_id)
+        )
