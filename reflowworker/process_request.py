@@ -230,7 +230,7 @@ class ProcessRequest(object):
                             )
 
     def _download_samples(self):
-        download_dir = CACHE_DIR + str(self.host) + '/'
+        download_dir = CACHE_DIR + str(self.host) + '/samples/'
         for s in self.samples:
             s.download_fcs(self.token, download_dir)
 
