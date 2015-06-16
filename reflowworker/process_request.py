@@ -106,7 +106,7 @@ class ProcessRequest(object):
                 self.panels[sample.site_panel_id] = panel_response['data']
 
         logger.info(
-            "(PR: %s) All Sample instances were created successfully",
+            "(PR: %s) Sample instances created",
             str(self.process_request_id)
         )
 
@@ -133,7 +133,7 @@ class ProcessRequest(object):
 
         return np_array
 
-    def _validate_inputs(self):
+    def _parse_input_parameters(self):
         # iterate through the inputs to validate:
         #     - all the required categories are present
         #     - there are no mixed implementations
@@ -144,20 +144,25 @@ class ProcessRequest(object):
                     self.transformation = pr_input['implementation_name']
                 elif self.transformation != pr_input['implementation_name']:
                     # mixed implementations aren't allowed
-                    return False
+                    raise ValueError(
+                        "Mixed implementations found for transformation inputs"
+                    )
             elif pr_input['category_name'] == 'clustering':
                 if not self.clustering:
                     self.clustering = pr_input['implementation_name']
                 elif self.clustering != pr_input['implementation_name']:
                     # mixed implementations aren't allowed
-                    return False
-                self.clustering_options[pr_input['input_name']] = pr_input['value']
-
-                # TODO: validate value against value_type
+                    raise ValueError(
+                        "Mixed implementations found for clustering inputs"
+                    )
+                self.clustering_options[pr_input['input_name']] = \
+                    pr_input['value']
 
         if not self.clustering:
             # clustering category is required, but missing
-            return False
+            raise NameError(
+                "Clustering implementation is required"
+            )
 
         self.random_seed = int(self.clustering_options['random_seed'])
 
@@ -223,8 +228,6 @@ class ProcessRequest(object):
                             self.panel_maps[panel].append(
                                 param['fcs_number'] - 1
                             )
-
-        return True
 
     def _download_samples(self):
         download_dir = CACHE_DIR + str(self.host) + '/'
@@ -355,9 +358,18 @@ class ProcessRequest(object):
         return True
 
     def analyze(self, device):
-        # First, validate the inputs
-        if not self._validate_inputs():
+        # First, validate the inputs, this also populates the panel maps
+        # used for "normalizing" the sample data columns
+        try:
+            self._parse_input_parameters()
+        except Exception as e:
+            logger.error(str(e), exc_info=True)
             raise ProcessingError("Invalid process request inputs")
+
+        logger.info(
+            "(PR: %s) Input parameters validated",
+            str(self.process_request_id)
+        )
 
         # Seed the RNG
         np.random.seed(self.random_seed)
