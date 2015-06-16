@@ -229,6 +229,7 @@ class Worker(Daemon):
                     str(e),
                     exc_info=True
                 )
+                continue
 
 if __name__ == "__main__":
     usage = "usage: %s start|stop|restart" % sys.argv[0]

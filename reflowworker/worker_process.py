@@ -100,7 +100,7 @@ class WorkerProcess(multiprocessing.Process):
 
         # Report the ProcessRequest is complete
         try:
-            verify_complete_response = utils.complete_pr_assignment(
+            utils.complete_pr_assignment(
                 self.host,
                 self.token,
                 self.assigned_pr.process_request_id,
@@ -123,5 +123,5 @@ class WorkerProcess(multiprocessing.Process):
         """
         It will be called after process() if that method returned False
         """
-        print self
+        print self, message
         return
