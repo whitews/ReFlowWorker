@@ -136,9 +136,6 @@ class Sample(object):
         """
         Returns NumPy array if all events in FCS file
         """
-        if not (self.fcs_path and os.path.exists(self.fcs_path)):
-            return None
-
         # open fcs file & convert events to NumPy array
         flow_obj = flowio.FlowData(self.fcs_path)
         numpy_data = np.reshape(
@@ -155,12 +152,6 @@ class Sample(object):
         Returns NumPy array if sub-sampling succeeds
         Also updates self.subsample_indices
         """
-        if not self.sample_id:
-            return None
-
-        if not (self.fcs_path and os.path.exists(self.fcs_path)):
-            return None
-
         if self.event_count < subsample_count:
             raise ProcessingError(
                 "Sample %s has fewer events than the subsample count" %
@@ -184,12 +175,6 @@ class Sample(object):
 
         Returns NumPy array of compensated events if successful
         """
-        if not self.sample_id:
-            return None
-
-        if not len(self.compensation) > 0:
-            return None
-
         # self.compensate has headers for the channel numbers, but
         # flowutils compensate() takes the plain matrix and indices as
         # separate arguments
@@ -211,17 +196,10 @@ class Sample(object):
 
         Returns NumPy array containing transformed data
         """
-        if not self.sample_id:
-            return False
-
         # don't transform scatter, time, or null channels
         panel = self.process_request.panels[self.site_panel_id]
-        if 'parameters' not in panel:
-            return False
         indices = list()
         for param in panel['parameters']:
-            if 'parameter_value_type' not in param:
-                return False
             if param['parameter_type'] in ['FSC', 'SSC', 'TIM', 'NUL']:
                 continue
             else:
@@ -245,18 +223,10 @@ class Sample(object):
 
         Returns NumPy array containing transformed data
         """
-
-        if not self.sample_id:
-            return False
-
         # don't transform scatter, time, or null channels
         panel = self.process_request.panels[self.site_panel_id]
-        if 'parameters' not in panel:
-            return False
         indices = list()
         for param in panel['parameters']:
-            if 'parameter_value_type' not in param:
-                return False
             if param['parameter_type'] in ['FSC', 'SSC', 'TIM', 'NUL']:
                 continue
             else:
