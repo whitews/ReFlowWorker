@@ -167,19 +167,13 @@ class Sample(object):
                 self.sample_id
             )
 
-        # open fcs file
-        flow_obj = flowio.FlowData(self.fcs_path)
-
         # generate random indices for subsample & save indices
         shuffled_indices = np.arange(self.event_count)
         np.random.shuffle(shuffled_indices)
         self.subsample_indices = shuffled_indices[:subsample_count]
 
         # sub-sample FCS events using given indices
-        numpy_data = np.reshape(
-            flow_obj.events,
-            (-1, flow_obj.channel_count)
-        )
+        numpy_data = self.get_all_events()
         subsample = numpy_data[self.subsample_indices]
 
         return subsample
