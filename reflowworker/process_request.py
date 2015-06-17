@@ -9,6 +9,7 @@ from logger import logger
 from processing_error import ProcessingError
 
 import re
+import shutil
 import numpy as np
 from reflowrestclient import utils
 
@@ -456,3 +457,6 @@ class ProcessRequest(object):
             "(PR: %s) POST of cluster results succeeded",
             str(self.process_request_id)
         )
+
+    def cleanup_files(self):
+        shutil.rmtree(self.directory)

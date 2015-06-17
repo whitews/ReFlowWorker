@@ -1,10 +1,10 @@
 import multiprocessing
-from logger import logger
-from processing_error import ProcessingError
 
 from reflowrestclient import utils
 
+from logger import logger
 from process_request import ProcessRequest
+from processing_error import ProcessingError
 
 
 class WorkerProcess(multiprocessing.Process):
@@ -122,7 +122,13 @@ class WorkerProcess(multiprocessing.Process):
             str(self.assigned_pr.process_request_id)
         )
 
-        # TODO: Clean up! Delete the local files
+        # cleanup intermediate files in PR working directory
+        self.assigned_pr.cleanup_files()
+
+        logger.info(
+            "(PR: %s) Cleaned up intermediate files",
+            str(self.assigned_pr.process_request_id)
+        )
 
     def report_errors(self, message):
         """
