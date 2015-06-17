@@ -355,7 +355,6 @@ class ProcessRequest(object):
                     self.directory + '/normalized',
                     self.panel_maps[s.site_panel_id]
                 )
-        return True
 
     def analyze(self, device):
         # First, validate the inputs, this also populates the panel maps
@@ -389,7 +388,13 @@ class ProcessRequest(object):
         # Pre-process data...takes care of various combinations of tasks
         # Afterward, all samples' subsampled data files will be available &
         # ready for analysis
-        if not self._pre_process():
+        try:
+            self._pre_process()
+        except ProcessingError as e:
+            logger.error(e.message, exc_info=True)
+            raise
+        except Exception as e:
+            logger.error(str(e), exc_info=True)
             raise ProcessingError("Error occurred during pre-processing")
 
         logger.info(
