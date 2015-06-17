@@ -19,12 +19,14 @@ def hdp(process_request, device):
     data_sets = list()
     for s in process_request.samples:
         norm_data = np.load(s.normalized_path)
+        if norm_data.size == 0:
+            raise ValueError("Found an empty data set")
         data_sets.append(norm_data)
 
     n_data_sets = len(data_sets)
-    if not n_data_sets:
-        # nothing for us to do, return True
-        return True
+    if n_data_sets < 1:
+        # nothing for us to do
+        raise ValueError("Data set list is empty")
 
     # NOTE: we import this here to avoid a PyCUDA issue when starting up
     # the daemonize procedure
