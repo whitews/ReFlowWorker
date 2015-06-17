@@ -7,6 +7,8 @@ import numpy as np
 import flowio
 import flowutils
 
+from processing_error import ProcessingError
+
 # NOTE: Don't attempt to log or catch exceptions here, ProcessRequest will
 #       handle any exceptions thrown. Exceptions will be raised in cases
 #       where processing should not continue.
@@ -158,6 +160,12 @@ class Sample(object):
 
         if not (self.fcs_path and os.path.exists(self.fcs_path)):
             return None
+
+        if self.event_count < subsample_count:
+            raise ProcessingError(
+                "Sample %s has fewer events than the subsample count" %
+                self.sample_id
+            )
 
         # open fcs file
         flow_obj = flowio.FlowData(self.fcs_path)
