@@ -235,127 +235,133 @@ class ProcessRequest(object):
         for s in self.samples:
             s.download_fcs(self.token, download_dir)
 
+    def _pre_process_stage1(self):
+        # we've got a simple 1st stage PR
+        for s in self.samples:
+            # Sub-sample events
+            subsample = s.generate_subsample(self.subsample_count)
+
+            # Compensate the sub-sampled events
+            comped_sub = s.compensate_events(subsample)
+
+            # Apply specified transform to compensated events
+            if self.transformation == 'logicle':
+                xform = s.apply_logicle_transform(comped_sub)
+            elif self.transformation == 'asinh':
+                xform = s.apply_asinh_transform(comped_sub)
+
+            # save xform as pre-processed data
+            s.create_preprocessed(xform, self.directory + '/preprocessed')
+
+            # next is normalization of common sample parameters
+            s.create_normalized(
+                xform,
+                self.directory + '/normalized',
+                self.panel_maps[s.site_panel_id]
+            )
+
+    def _pre_process_stage2(self):
+        # we've got a 2nd stage PR, so much more pre-processing to do...
+        # Since only a few of the 1st stage clusters were selected
+        # for analysis, thus we use the original model from stage 1 to
+        # classify all events in order to enrich a new sub-sample with
+        # just events from those selected clusters
+
+        for s in self.samples:
+            # get all events
+            data = s.get_all_events()
+
+            # compensate all events
+            data = s.compensate_events(data)
+
+            # transform all events
+            if self.transformation == 'logicle':
+                data = s.apply_logicle_transform(data)
+            elif self.transformation == 'asinh':
+                data = s.apply_asinh_transform(data)
+
+            # Retrieve this sample's components from parent stage
+            components = utils.get_sample_cluster_components(
+                self.host,
+                self.token,
+                process_request_pk=self.parent_stage,
+                sample_pk=s.sample_id,
+                method=self.method
+            )
+
+            # create the DPCluster instances & save a map of the
+            # components that belong to the specified clusters from stage 1
+            # NOTE: we import this here to avoid a PyCUDA issue when
+            # starting up the daemonize procedure
+            from flowstats.dp_cluster import DPCluster, DPMixture
+            dp_clusters = []
+            enrich_components = []
+            for comp_idx, comp in enumerate(components['data']):
+                # determine if this comp was a member of a user-specified
+                # cluster to include for analysis
+                if comp['cluster'] in self.parent_clusters:
+                    enrich_components.append(comp_idx)
+
+                # use the channel order from the covariance matrix to
+                # avoid re-arranging the covariance matrix
+                # all the covariance matrices in all components will have
+                # been saved in the same order from the 1st stage
+                covariance = []
+                for l in comp['covariance_matrix'].splitlines():
+                    covariance.append(
+                        [float(n) for n in l.split(',')]
+                    )
+                indices = covariance.pop(0)
+                indices = [int(i) for i in indices]
+                covariance = np.array(covariance)
+
+                locations = []
+                for i in indices:
+                    for c in comp['parameters']:
+                        if (c['channel'] - 1) == i:
+                            locations.append(c['location'])
+
+                dp_clusters.append(
+                    DPCluster(
+                        comp['weight'],
+                        locations,
+                        covariance
+                    )
+                )
+
+            dp_mixture = DPMixture(dp_clusters)
+            classifications = dp_mixture.classify(data[:, indices])
+            enrich_indices = []
+            for ec in enrich_components:
+                # note: where returns a tuple where first item is a
+                # numpy array containing the indices...probably does this
+                # for compatibility with numpy fancy indexing
+                enrich_indices.extend(
+                    np.where(classifications == ec)[0]
+                )
+
+            # shuffle the enriched indices and draw our subsample
+            # saving the chosen indices for the sample
+            np.random.shuffle(enrich_indices)
+            s.subsample_indices = enrich_indices[:self.subsample_count]
+
+            # save subsample as pre-processed data
+            s.create_preprocessed(
+                data[s.subsample_indices], self.directory + '/preprocessed'
+            )
+
+            # next is normalization of common sample parameters
+            s.create_normalized(
+                data[s.subsample_indices],
+                self.directory + '/normalized',
+                self.panel_maps[s.site_panel_id]
+            )
+
     def _pre_process(self):
         if self.parent_stage is None:
-            # we've got a simple 1st stage PR
-            for s in self.samples:
-                # Sub-sample events
-                subsample = s.generate_subsample(self.subsample_count)
-
-                # Compensate the sub-sampled events
-                comped_sub = s.compensate_events(subsample)
-
-                # Apply specified transform to compensated events
-                if self.transformation == 'logicle':
-                    xform = s.apply_logicle_transform(comped_sub)
-                elif self.transformation == 'asinh':
-                    xform = s.apply_asinh_transform(comped_sub)
-
-                # save xform as pre-processed data
-                s.create_preprocessed(xform, self.directory + '/preprocessed')
-
-                # next is normalization of common sample parameters
-                s.create_normalized(
-                    xform,
-                    self.directory + '/normalized',
-                    self.panel_maps[s.site_panel_id]
-                )
+            self._pre_process_stage1()
         else:
-            # we've got a 2nd stage PR, so much more pre-processing to do...
-            # Since only a few of the 1st stage clusters were selected
-            # for analysis, thus we use the original model from stage 1 to
-            # classify all events in order to enrich a new sub-sample with
-            # just events from those selected clusters
-
-            for s in self.samples:
-                # get all events
-                data = s.get_all_events()
-
-                # compensate all events
-                data = s.compensate_events(data)
-
-                # transform all events
-                if self.transformation == 'logicle':
-                    data = s.apply_logicle_transform(data)
-                elif self.transformation == 'asinh':
-                    data = s.apply_asinh_transform(data)
-
-                # Retrieve this sample's components from parent stage
-                components = utils.get_sample_cluster_components(
-                    self.host,
-                    self.token,
-                    process_request_pk=self.parent_stage,
-                    sample_pk=s.sample_id,
-                    method=self.method
-                )
-
-                # create the DPCluster instances & save a map of the
-                # components that belong to the specified clusters from stage 1
-                # NOTE: we import this here to avoid a PyCUDA issue when
-                # starting up the daemonize procedure
-                from flowstats.dp_cluster import DPCluster, DPMixture
-                dp_clusters = []
-                enrich_components = []
-                for comp_idx, comp in enumerate(components['data']):
-                    # determine if this comp was a member of a user-specified
-                    # cluster to include for analysis
-                    if comp['cluster'] in self.parent_clusters:
-                        enrich_components.append(comp_idx)
-
-                    # use the channel order from the covariance matrix to
-                    # avoid re-arranging the covariance matrix
-                    # all the covariance matrices in all components will have
-                    # been saved in the same order from the 1st stage
-                    covariance = []
-                    for l in comp['covariance_matrix'].splitlines():
-                        covariance.append(
-                            [float(n) for n in l.split(',')]
-                        )
-                    indices = covariance.pop(0)
-                    indices = [int(i) for i in indices]
-                    covariance = np.array(covariance)
-
-                    locations = []
-                    for i in indices:
-                        for c in comp['parameters']:
-                            if (c['channel'] - 1) == i:
-                                locations.append(c['location'])
-
-                    dp_clusters.append(
-                        DPCluster(
-                            comp['weight'],
-                            locations,
-                            covariance
-                        )
-                    )
-
-                dp_mixture = DPMixture(dp_clusters)
-                classifications = dp_mixture.classify(data[:, indices])
-                enrich_indices = []
-                for ec in enrich_components:
-                    # note: where returns a tuple where first item is a
-                    # numpy array containing the indices...probably does this
-                    # for compatibility with numpy fancy indexing
-                    enrich_indices.extend(
-                        np.where(classifications == ec)[0]
-                    )
-
-                # shuffle the enriched indices and draw our subsample
-                # saving the chosen indices for the sample
-                np.random.shuffle(enrich_indices)
-                s.subsample_indices = enrich_indices[:self.subsample_count]
-
-                # save subsample as pre-processed data
-                s.create_preprocessed(
-                    data[s.subsample_indices], self.directory + '/preprocessed'
-                )
-
-                # next is normalization of common sample parameters
-                s.create_normalized(
-                    data[s.subsample_indices],
-                    self.directory + '/normalized',
-                    self.panel_maps[s.site_panel_id]
-                )
+            self._pre_process_stage2()
 
     def analyze(self, device):
         # First, validate the inputs, this also populates the panel maps
