@@ -262,11 +262,9 @@ class ProcessRequest(object):
 
     def _pre_process_stage2(self):
         # we've got a 2nd stage PR, so much more pre-processing to do...
-        # Since only a few of the 1st stage clusters were selected
-        # for analysis, thus we use the original model from stage 1 to
-        # classify all events in order to enrich a new sub-sample with
-        # just events from those selected clusters
-
+        # Only a few of the 1st stage clusters were selected for analysis,
+        # so we use the original stage 1 model to classify all events to
+        # enrich a new sub-sample with events from those selected clusters
         for s in self.samples:
             # get all events
             data = s.get_all_events()
@@ -281,7 +279,8 @@ class ProcessRequest(object):
                 data = s.apply_asinh_transform(data)
 
             # Retrieve this sample's components from parent stage
-            components = utils.get_sample_cluster_components(
+            # NOTE: Each user-selected cluster can contain multiple components
+            response = utils.get_sample_cluster_components(
                 self.host,
                 self.token,
                 process_request_pk=self.parent_stage,
@@ -289,14 +288,17 @@ class ProcessRequest(object):
                 method=self.method
             )
 
+            components = response['data']
+
             # create the DPCluster instances & save a map of the
             # components that belong to the specified clusters from stage 1
-            # NOTE: we import this here to avoid a PyCUDA issue when
-            # starting up the daemonize procedure
+            # NOTE: Import from flowstats here to avoid a PyCUDA issue when
+            #       starting up the daemonize procedure
             from flowstats.dp_cluster import DPCluster, DPMixture
             dp_clusters = []
             enrich_components = []
-            for comp_idx, comp in enumerate(components['data']):
+            indices = []
+            for comp_idx, comp in enumerate(components):
                 # determine if this comp was a member of a user-specified
                 # cluster to include for analysis
                 if comp['cluster'] in self.parent_clusters:
@@ -338,6 +340,12 @@ class ProcessRequest(object):
                 # for compatibility with numpy fancy indexing
                 enrich_indices.extend(
                     np.where(classifications == ec)[0]
+                )
+
+            if len(enrich_indices) < self.subsample_count:
+                raise ProcessingError(
+                    "Sample %s has fewer enriched events than subsample count" %
+                    s.sample_id
                 )
 
             # shuffle the enriched indices and draw our subsample
