@@ -239,7 +239,10 @@ class ProcessRequest(object):
         # we've got a simple 1st stage PR
         for s in self.samples:
             # Sub-sample events
-            subsample = s.generate_subsample(self.subsample_count)
+            subsample = s.generate_subsample(
+                self.subsample_count,
+                self.random_seed
+            )
 
             # Compensate the sub-sampled events
             comped_sub = s.compensate_events(subsample)
@@ -350,7 +353,15 @@ class ProcessRequest(object):
 
             # shuffle the enriched indices and draw our subsample
             # saving the chosen indices for the sample
-            np.random.shuffle(enrich_indices)
+            # Note: we create a new RandomState per file to guarantee
+            # reproducible sampling for each file between PRs. The same
+            # file may be analyzed with any number of other files, so could
+            # occur in a different order. This makes sure we get the same
+            # sub-sample between runs regardless of the order or number of
+            # files.
+            rng = np.random.RandomState()
+            rng.seed(self.random_seed)
+            rng.shuffle(enrich_indices)
             s.subsample_indices = enrich_indices[:self.subsample_count]
 
             # save subsample as pre-processed data
@@ -384,9 +395,6 @@ class ProcessRequest(object):
             "(PR: %s) Input parameters validated",
             str(self.process_request_id)
         )
-
-        # Seed the RNG
-        np.random.seed(self.random_seed)
 
         # Download the samples
         try:

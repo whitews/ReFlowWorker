@@ -145,7 +145,7 @@ class Sample(object):
 
         return numpy_data
 
-    def generate_subsample(self, subsample_count):
+    def generate_subsample(self, subsample_count, random_seed):
         """
         Sub-samples FCS sample
 
@@ -158,9 +158,14 @@ class Sample(object):
                 self.sample_id
             )
 
-        # generate random indices for subsample & save indices
+        # generate random indices for subsample
+        # using a new RandomState with given seed
         shuffled_indices = np.arange(self.event_count)
-        np.random.shuffle(shuffled_indices)
+        rng = np.random.RandomState()
+        rng.seed(random_seed)
+        rng.shuffle(shuffled_indices)
+
+        # save indices
         self.subsample_indices = shuffled_indices[:subsample_count]
 
         # sub-sample FCS events using given indices
