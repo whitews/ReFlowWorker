@@ -152,7 +152,22 @@ class Sample(object):
         Returns NumPy array if sub-sampling succeeds
         Also updates self.subsample_indices
         """
-        if self.event_count < subsample_count:
+
+        # Before sub-sampling we need to filter out events with
+        # negative scatter values. To do that we need the parameter
+        # annotations
+        params = self.process_request.panels[self.site_panel_id]['parameters']
+        scatter_indices = []
+        for p in params:
+            if p['parameter_type'] in ['FSC', 'SSC']:
+                scatter_indices.append(p['fcs_number'] - 1)
+
+        numpy_data = self.get_all_events()
+
+        is_neg = numpy_data[:, scatter_indices] < 0
+        is_neg = np.where(is_neg.any(True))[0]
+
+        if self.event_count - len(is_neg) < subsample_count:
             raise ProcessingError(
                 "Sample %s has fewer events than the subsample count" %
                 self.sample_id
@@ -161,6 +176,7 @@ class Sample(object):
         # generate random indices for subsample
         # using a new RandomState with given seed
         shuffled_indices = np.arange(self.event_count)
+        shuffled_indices = np.delete(shuffled_indices, is_neg)
         rng = np.random.RandomState()
         rng.seed(random_seed)
         rng.shuffle(shuffled_indices)
@@ -169,7 +185,6 @@ class Sample(object):
         self.subsample_indices = shuffled_indices[:subsample_count]
 
         # sub-sample FCS events using given indices
-        numpy_data = self.get_all_events()
         subsample = numpy_data[self.subsample_indices]
 
         return subsample
