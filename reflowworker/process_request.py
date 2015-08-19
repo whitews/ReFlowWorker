@@ -346,10 +346,9 @@ class ProcessRequest(object):
                 )
 
             if len(enrich_indices) < self.subsample_count:
-                raise ProcessingError(
-                    "Sample %s has fewer enriched events than subsample count" %
-                    s.sample_id
-                )
+                actual_subsample_count = len(enrich_indices)
+            else:
+                actual_subsample_count = self.subsample_count
 
             # shuffle the enriched indices and draw our subsample
             # saving the chosen indices for the sample
@@ -362,7 +361,7 @@ class ProcessRequest(object):
             rng = np.random.RandomState()
             rng.seed(self.random_seed)
             rng.shuffle(enrich_indices)
-            s.subsample_indices = enrich_indices[:self.subsample_count]
+            s.subsample_indices = enrich_indices[:actual_subsample_count]
 
             # save subsample as pre-processed data
             s.create_preprocessed(
