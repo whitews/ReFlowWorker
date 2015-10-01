@@ -304,7 +304,7 @@ class ProcessRequest(object):
             for comp_idx, comp in enumerate(components):
                 # determine if this comp was a member of a user-specified
                 # cluster to include for analysis
-                if comp['cluster'] in self.parent_clusters:
+                if int(comp['cluster']) in self.parent_clusters:
                     enrich_components.append(comp_idx)
 
                 # use the channel order from the covariance matrix to
