@@ -63,8 +63,6 @@ class Sample(object):
         self.site_id = sample_dict['site']
         self.site_name = sample_dict['site_name']
 
-        self.cytometer_id = sample_dict['cytometer']
-
         self.specimen_id = sample_dict['specimen']
         self.specimen_name = sample_dict['specimen_name']
 
