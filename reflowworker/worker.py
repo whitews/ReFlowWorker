@@ -130,7 +130,7 @@ class Worker(Daemon):
                 # work assigned to this worker
                 self.launch_workers()
 
-                # request assignements for any free GPU devices
+                # request assignments for any free GPU devices
                 self.request_assignments()
 
             time.sleep(DEFAULT_SLEEP)
