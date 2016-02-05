@@ -166,10 +166,9 @@ class Sample(object):
         is_neg = np.where(is_neg.any(True))[0]
 
         if self.event_count - len(is_neg) < subsample_count:
-            raise ProcessingError(
-                "Sample %s has fewer events than the subsample count" %
-                self.sample_id
-            )
+            # We used to raise a ProcessingError here, but we'll allow
+            # analysis of these samples with fewer events
+            subsample_count = self.event_count - len(is_neg)
 
         # generate random indices for subsample
         # using a new RandomState with given seed
