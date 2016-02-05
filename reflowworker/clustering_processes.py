@@ -107,6 +107,20 @@ def hdp(process_request, device):
             event_row.insert(0, int(sample.subsample_indices[j]))
             event_map[event_class].append(event_row)
 
+        # So we captured all the classified events in the event map, but
+        # there may be clusters for which this sample has no events. We need
+        # to catch these 0 event sample clusters, otherwise a ReFlow user
+        # may not even know about the existence of them unless they looked
+        # carefully at each sample's results
+        zero_clusters = set(modal_mixture.cmap.keys()) - set(np.unique(classifications))
+        for event_class in zero_clusters:
+            # create a new map for this sample cluster w/ header row
+            header_row = ['event_index']
+            header_row.extend(
+                range(1, x_data.shape[1] + 1)
+            )
+            event_map[event_class] = [header_row]  # a list of lists
+
         # now we have all the events for this sample classified and organized
         # by cluster, so we can start creating the SampleCluster instances
         for event_class in event_map:
