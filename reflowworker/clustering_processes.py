@@ -9,6 +9,23 @@ from sample_models import Cluster, SampleCluster, \
 # from flowstats import cluster
 
 
+class ProgressCallable(object):
+    def __init__(self, process_request, burn_in, iteration_count):
+        self.process_request = process_request
+        self.burn_in = burn_in
+        self.iteration_count = iteration_count
+        self.total_iter = burn_in + iteration_count
+
+    def __call__(self, iteration):
+        percent_complete = self.calc_percent_complete(iteration)
+        self.process_request.report_pr_progress(percent_complete)
+
+    def calc_percent_complete(self, iteration):
+        # the burn-in iterations are negative
+        # while the n-iterations are positive
+        return (iteration + self.burn_in + 1) * 100.0 / self.total_iter
+
+
 def hdp(process_request, device):
     iteration_count = int(process_request.clustering_options['iteration_count'])
     cluster_count = int(process_request.clustering_options['cluster_count'])
@@ -32,6 +49,12 @@ def hdp(process_request, device):
     # the daemonize procedure
     from flowstats import cluster
 
+    progress_callable = ProgressCallable(
+        process_request,
+        burn_in,
+        iteration_count
+    )
+
     if n_data_sets > 1:
         model = cluster.HDPMixtureModel(
             cluster_count,
@@ -43,7 +66,8 @@ def hdp(process_request, device):
             [device],
             seed=random_seed,
             munkres_id=True,
-            verbose=True
+            verbose=True,
+            callback=progress_callable
         )
     else:
         model = cluster.DPMixtureModel(
@@ -57,7 +81,8 @@ def hdp(process_request, device):
             [device],
             seed=random_seed,
             munkres_id=True,
-            verbose=True
+            verbose=True,
+            callback=progress_callable
         )
 
     # Run make_modal on averaged results to merge insignificant modes
