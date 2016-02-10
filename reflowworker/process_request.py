@@ -33,6 +33,9 @@ class ProcessRequest(object):
         self.method = method  # 'http://' or 'https://'
         self.process_request_id = pr_dict['id']
 
+        # for tracking & reporting back progress
+        self.percent_complete = 0
+
         # 2nd stage processing stuff
         self.parent_stage = pr_dict['parent_stage']
         # stores the PK of the parent clusters to use for enrichment
@@ -439,6 +442,19 @@ class ProcessRequest(object):
             "(PR: %s) Clustering process succeeded",
             str(self.process_request_id)
         )
+
+    def report_pr_progress(self, percent_complete):
+        # compare new progress as integer against old progress, if
+        # different report back to the ReFlow server
+        if self.percent_complete != int(percent_complete):
+            self.percent_complete = int(percent_complete)
+            utils.report_pr_progress(
+                self.host,
+                self.token,
+                self.process_request_id,
+                self.percent_complete,
+                method=self.method
+            )
 
     def post_clusters(self):
         """
