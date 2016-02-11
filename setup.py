@@ -14,8 +14,8 @@ setup(
         'numpy (>=1.6)',
         'pycuda (>=2013.1.1)',
         'reflowrestclient (==0.2.0)',
-        'flowio',
-        'flowutils==0.3',
-        'flowstats==0.4'
+        'flowio (==0.6)',
+        'flowutils (==0.3)',
+        'flowstats (==0.4)'
     ]
 )
