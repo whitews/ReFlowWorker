@@ -10,6 +10,7 @@ from processing_error import ProcessingError
 
 import re
 import shutil
+import time
 import numpy as np
 from reflowrestclient import utils
 
@@ -461,34 +462,81 @@ class ProcessRequest(object):
         POST all clusters and sample clusters (with event classifications)
         to the ReFlow server. This should only be called after local
         processing has finished.
+
+        Note:
+            Every so often the ReFlow server may return a bad response to a
+            POST, so we'll employ a 3-strikes and you're out strategy with
+            a 2 second delay. The 'requests' library has a max_retries for
+            the HTTPAdapter but doesn't provide a delay option, so we'll roll
+            our own.
         """
-        # first post the Cluster instances to get their ReFlow PKs
+        max_retries = 3
+
+        # First, post the Cluster instances to get their ReFlow PKs
         for c in self.clusters:
             # POST only if it has no PK
             if not c.reflow_pk:
-                try:
-                    c.post(
-                        self.host,
-                        self.token,
-                        self.method,
-                        self.process_request_id
-                    )
-                except Exception as e:
-                    logger.error(str(e), exc_info=True)
-                    raise ProcessingError("Cluster POST failed")
+                success = False
+                attempt = 0
+
+                while attempt < max_retries and not success:
+                    try:
+                        c.post(
+                            self.host,
+                            self.token,
+                            self.method,
+                            self.process_request_id
+                        )
+                        success = True
+                    except Exception as e:
+                        logger.warning(
+                            "(PR: %s) POST failed for cluster %s - attempt %d of %d)",
+                            str(self.process_request_id),
+                            str(c.index),
+                            attempt + 1,
+                            max_retries
+                        )
+                        attempt += 1
+
+                        # after 3 strikes, we'll give up
+                        if attempt == max_retries:
+                            logger.error(str(e), exc_info=True)
+                            raise ProcessingError("Cluster POST failed")
+                        else:
+                            # wait a couple seconds before retrying
+                            time.sleep(2.0)
 
             # now save all the sample clusters
             for sc in c.sample_clusters:
-                try:
-                    sc.post(
-                        self.host,
-                        self.token,
-                        self.method,
-                        c.reflow_pk
-                    )
-                except Exception as e:
-                    logger.error(str(e), exc_info=True)
-                    raise ProcessingError("SampleCluster POST failed")
+                success = False
+                attempt = 0
+
+                while attempt < max_retries and not success:
+                    try:
+                        sc.post(
+                            self.host,
+                            self.token,
+                            self.method,
+                            c.reflow_pk
+                        )
+                        success = True
+                    except Exception as e:
+                        logger.warning(
+                            "(PR: %s) POST failed for sample cluster (cluster %s) - attempt %d of %d",
+                            str(self.process_request_id),
+                            str(c.index),
+                            attempt + 1,
+                            max_retries
+                        )
+                        attempt += 1
+
+                        # after 3 strikes, we'll give up
+                        if attempt == max_retries:
+                            logger.error(str(e), exc_info=True)
+                            raise ProcessingError("SampleCluster POST failed")
+                        else:
+                            # wait a couple seconds before retrying
+                            time.sleep(2.0)
 
         logger.info(
             "(PR: %s) POST of cluster results succeeded",
