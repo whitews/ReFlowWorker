@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='ReFlowWorker',
-    version='0.2.1',
+    version='0.2.2',
     author='Scott White',
     author_email='scott.white@duke.edu',
     packages=['reflowworker'],
