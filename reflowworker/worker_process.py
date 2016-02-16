@@ -52,6 +52,33 @@ class WorkerProcess(multiprocessing.Process):
 
     def run(self):
         # We've got something to do!
+        #
+        # Before we start anything, we need to purge any prior ProcessRequest
+        # results on the ReFlow server. This is necessary in the unlikely
+        # case that the job had previously been worked on and a partial set
+        # of results were uploaded but the status of the ProcessRequest was not
+        # set to 'Error'
+        try:
+            purge_response = utils.purge_pr_results(
+                self.host,
+                self.token,
+                self.assigned_pr.process_request_id,
+                method=self.method
+            )
+        except Exception, e:
+            logger.error(str(e))
+            self.report_errors(
+                "Unknown error occurred purging ProcessRequest results"
+            )
+            raise ProcessingError("Fatal error creating WorkerProcess")
+
+        if purge_response['status'] != 200:
+            self.report_errors(
+                "Unknown error occurred purging ProcessRequest results"
+            )
+            raise ProcessingError("Fatal error creating WorkerProcess")
+
+        # now we can start analyzing
         try:
             self.assigned_pr.analyze(self.device)
         except ProcessingError as e:
