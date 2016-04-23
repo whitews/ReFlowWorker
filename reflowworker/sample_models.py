@@ -114,7 +114,6 @@ class Sample(object):
                 self.host,
                 token,
                 sample_pk=self.sample_id,
-                data_format='fcs',
                 directory=download_dir,
                 method=self.process_request.method
             )
