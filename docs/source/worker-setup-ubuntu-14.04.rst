@@ -48,8 +48,8 @@ to install any of the Python libraries mentioned in this procedure.
 
         git clone https://github.com/andrewcron/cy_armadillo.git
         git clone https://github.com/andrewcron/cyrand.git
-        git clone https://github.com/dukestats/gpustats.git
-        git clone https://github.com/andrewcron/dpmix.git
+        git clone https://github.com/whitews/gpustats.git
+        git clone https://github.com/whitews/dpmix.git
         git clone https://github.com/whitews/FlowIO.git
         git clone https://github.com/whitews/FlowUtils.git
         git clone https://github.com/whitews/FlowStats.git
