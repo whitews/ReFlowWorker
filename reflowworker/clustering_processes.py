@@ -63,9 +63,9 @@ def hdp(process_request, device):
         )
         results = model.fit(
             data_sets,
-            [device],
+            device,
             seed=random_seed,
-            munkres_id=True,
+            munkres_id=False,
             verbose=True,
             callback=progress_callable
         )
@@ -78,9 +78,9 @@ def hdp(process_request, device):
         )
         results = model.fit(
             data_sets[0],
-            [device],
+            device,
             seed=random_seed,
-            munkres_id=True,
+            munkres_id=False,
             verbose=True,
             callback=progress_callable
         )
