@@ -193,11 +193,17 @@ def hdp(process_request, device):
                     )
                 )
 
+            if data_sets[i].shape[0] == 0:
+                event_percentage = 0.0  # avoid divide by zero
+            else:
+                event_percentage = (len(event_map[event_class]) - 1) / float(data_sets[i].shape[0]) * 100.0
+
             clusters[event_class].add_sample_cluster(
                 SampleCluster(
                     sample_id=sample.sample_id,
                     parameters=sc_parameters,
                     events=event_map[event_class],
+                    event_percentage=event_percentage,
                     components=components
                 )
             )
